@@ -77,7 +77,7 @@ class Settings:
     upload_dir: Path = _path_from_env("UPLOAD_DIR", BASE_DIR / "data" / "uploads")
     frontend_dir: Path = _path_from_env("FRONTEND_DIR", PROJECT_ROOT / "frontend" / "simple_web")
     default_character_id: str = os.getenv("DEFAULT_CHARACTER_ID", "role01")
-    llm_provider: str = os.getenv("LLM_PROVIDER", "auto")
+    llm_provider: str = os.getenv("LLM_PROVIDER", "openai")
     openai_api_key: str | None = _optional_env("OPENAI_API_KEY")
     openai_base_url: str | None = _openai_base_url()
     openai_model: str | None = _optional_env("OPENAI_MODEL")

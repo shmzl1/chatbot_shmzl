@@ -48,7 +48,7 @@ class LLMService:
             missing.append("OPENAI_API_KEY")
         if not settings.openai_model:
             missing.append("OPENAI_MODEL")
-        if provider in {"auto", "openai_compatible", "ark"} and not settings.openai_base_url:
+        if not settings.openai_base_url:
             missing.append("OPENAI_BASE_URL")
         if missing:
             raise HTTPException(

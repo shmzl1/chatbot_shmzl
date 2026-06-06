@@ -59,6 +59,7 @@ backend/data/uploads/*
 !backend/data/uploads/.gitkeep
 !backend/data/uploads/avatars/
 backend/data/uploads/avatars/*
+!backend/data/uploads/avatars/.gitkeep
 !backend/data/uploads/avatars/user/
 !backend/data/uploads/avatars/characters/
 backend/data/uploads/avatars/user/*

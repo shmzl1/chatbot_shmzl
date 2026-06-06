@@ -60,7 +60,7 @@ copy .env.example backend\.env
 
 ```text
 DATABASE_URL="postgresql://your_db_user:your_db_password@127.0.0.1:5432/your_db_name"
-LLM_PROVIDER="auto"
+LLM_PROVIDER="openai"
 OPENAI_API_KEY="your_api_key_here"
 OPENAI_BASE_URL="https://your-openai-compatible-base-url.example.com/api/v3"
 OPENAI_MODEL="your_model_name_here"
@@ -168,6 +168,15 @@ POST /characters/{character_id}/avatar
 
 ## 验收流程
 
+启动前先安装依赖并运行后端：
+
+```powershell
+cd E:\my_software\chatbot\backend
+conda activate 3-chatbot
+python -m pip install -r requirements.txt
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
 1. 打开 `http://127.0.0.1:8000/app/`
 2. 第一次看到“初始化本地账号”页面
 3. 设置本地用户名和密码
@@ -179,6 +188,11 @@ POST /characters/{character_id}/avatar
 9. 刷新页面，确认仍保持登录和头像
 10. 点击退出登录，确认不能直接进入聊天页面
 11. 重新登录，确认聊天功能正常
+
+收尾安全验证：
+- `.env` 中缺少 `OPENAI_API_KEY`、`OPENAI_MODEL` 或 `OPENAI_BASE_URL` 时，聊天接口应该显示明确配置错误，不自动 mock。
+- 检索 JSONL 文件缺失或格式错误时，后端应该显示具体文件路径和行号。
+- 上传头像真实文件保存在 `backend/data/uploads/`，不会被提交到 Git；只保留 `.gitkeep` 目录占位文件。
 
 ## 重置本地数据
 
@@ -237,7 +251,7 @@ Get-Content .\backup_role_chatbot.sql | docker exec -i role-chatbot-postgres psq
 当前项目优先本地调试，默认关闭静默兜底。配置错误、数据库错误、migration 错误、模型调用错误、角色文件错误、知识库 JSONL 错误、语音服务错误会直接暴露，方便定位问题。
 
 - 数据库不可用时，聊天和会话接口会返回明确数据库错误，不返回空数据。
-- LLM 配置不完整或接口失败时，聊天接口会报错，不自动切换 mock 回复。
+- LLM_PROVIDER 默认使用 `openai`。`LLM_PROVIDER=auto` 不会自动切换 mock；`OPENAI_API_KEY`、`OPENAI_MODEL`、`OPENAI_BASE_URL` 缺失或模型接口失败时，聊天接口会直接报错，前端显示后端返回的 detail。
 - 角色 JSON、检索 JSONL 格式错误会报具体文件和行号。
 - `voice=true` 且 GPT-SoVITS 不可用时会返回语音服务错误；`voice=false` 仍可只走文本。
 - 前端会优先显示后端返回的 `detail`；如果没有 `detail`，会显示 HTTP 状态码和接口路径。
