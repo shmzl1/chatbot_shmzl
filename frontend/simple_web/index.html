@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Role Chatbot</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body class="user-mode">
+    <div class="app-shell">
+      <aside class="sessions-pane">
+        <div class="pane-header">
+          <div>
+            <p class="eyebrow">Local Role</p>
+            <h1>Chatbot</h1>
+          </div>
+          <button id="newSessionButton" class="icon-button" type="button" title="新会话">+</button>
+        </div>
+        <div class="dev-only">
+          <label class="field-label" for="characterSelect">角色</label>
+          <select id="characterSelect" class="select"></select>
+        </div>
+        <div class="session-list-header">
+          <span>会话</span>
+          <div class="header-actions">
+            <button id="refreshSessionsButton" class="text-button" type="button">刷新</button>
+            <button id="clearSessionsButton" class="text-button danger dev-only-inline" type="button">清空</button>
+          </div>
+        </div>
+        <div id="sessionList" class="session-list"></div>
+      </aside>
+
+      <main class="chat-pane">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow" id="statusText">Ready</p>
+            <h2 id="activeSessionTitle">新会话</h2>
+          </div>
+          <div class="chat-header-actions">
+            <button id="settingsButton" class="text-button" type="button">设置</button>
+            <a class="docs-link dev-only-inline" href="/debug/export" target="_blank" rel="noreferrer">导出</a>
+            <a class="docs-link dev-only-inline" href="http://127.0.0.1:8081" target="_blank" rel="noreferrer">DB Admin</a>
+            <a class="docs-link dev-only-inline" href="/docs" target="_blank" rel="noreferrer">API Docs</a>
+            <button id="deleteSessionButton" class="text-button danger dev-only-inline" type="button">删除会话</button>
+          </div>
+        </header>
+
+        <section id="messages" class="messages"></section>
+        <section id="memoryConfirmList" class="memory-confirm-list"></section>
+
+        <form id="chatForm" class="composer">
+          <textarea id="messageInput" rows="3" placeholder="输入一句话..." required></textarea>
+          <div class="composer-actions">
+            <label class="voice-toggle">
+              <input id="voiceToggle" type="checkbox" />
+              <span>语音</span>
+            </label>
+            <label class="voice-toggle dev-only">
+              <input id="promptToggle" type="checkbox" />
+              <span>Prompt</span>
+            </label>
+            <button id="sendButton" type="submit">发送</button>
+          </div>
+        </form>
+      </main>
+
+      <aside class="debug-pane">
+        <div class="pane-header compact">
+          <div>
+            <p class="eyebrow">Debug</p>
+            <h2>候选与检索</h2>
+          </div>
+        </div>
+        <section class="debug-section">
+          <h3>数据库</h3>
+          <div id="databaseInfo" class="database-info"></div>
+        </section>
+        <section class="debug-section">
+          <div class="section-title-row">
+            <h3>角色卡</h3>
+            <button id="loadCharacterButton" class="text-button" type="button">加载</button>
+          </div>
+          <textarea id="characterJsonInput" class="character-json" rows="8" spellcheck="false"></textarea>
+          <button id="saveCharacterButton" class="wide-button" type="button">保存角色卡</button>
+        </section>
+        <section class="debug-section">
+          <h3>评分日志</h3>
+          <form id="feedbackForm" class="feedback-form">
+            <div class="feedback-controls">
+              <input id="feedbackScoreInput" type="number" min="1" max="10" value="8" />
+              <button type="submit">保存评分</button>
+            </div>
+            <textarea id="feedbackNoteInput" rows="2" placeholder="这轮效果哪里好或不好..."></textarea>
+          </form>
+        </section>
+        <section class="debug-section">
+          <h3>语音测试</h3>
+          <form id="voiceTestForm" class="voice-test-form">
+            <textarea id="voiceTestTextInput" rows="2" placeholder="输入要合成的文本..."></textarea>
+            <div class="voice-test-controls">
+              <select id="voiceTestEmotionSelect">
+                <option value="neutral">neutral</option>
+                <option value="soft">soft</option>
+                <option value="angry">angry</option>
+                <option value="tired">tired</option>
+                <option value="teasing">teasing</option>
+                <option value="serious">serious</option>
+              </select>
+              <button type="submit">生成</button>
+            </div>
+          </form>
+          <div id="voiceTestResult" class="voice-test-result"></div>
+        </section>
+        <section class="debug-section">
+          <div class="section-title-row">
+            <h3>长期记忆</h3>
+            <button id="refreshMemoriesButton" class="text-button" type="button">刷新</button>
+          </div>
+          <form id="memoryForm" class="memory-form">
+            <textarea id="memoryInput" rows="3" placeholder="写入一条长期记忆..." required></textarea>
+            <div class="memory-controls">
+              <input id="memoryTagsInput" type="text" placeholder="标签，逗号分隔" />
+              <input id="memoryImportanceInput" type="number" min="1" max="10" value="5" title="重要度" />
+              <button type="submit">保存</button>
+            </div>
+          </form>
+          <div id="memorySuggestionList" class="memory-suggestion-list"></div>
+          <div id="memoryList" class="memory-list"></div>
+        </section>
+        <section class="debug-section">
+          <div class="section-title-row">
+            <h3>知识库</h3>
+            <div class="header-actions">
+              <button id="importKnowledgeButton" class="text-button" type="button">导入示例</button>
+              <button id="clearKnowledgeButton" class="text-button danger" type="button">清空</button>
+              <button id="refreshKnowledgeButton" class="text-button" type="button">刷新</button>
+            </div>
+          </div>
+          <form id="knowledgeForm" class="knowledge-form">
+            <div class="knowledge-controls">
+              <select id="knowledgeTypeSelect">
+                <option value="lore">lore</option>
+                <option value="dialogue">dialogue</option>
+                <option value="reaction">reaction</option>
+              </select>
+              <input id="knowledgeTitleInput" type="text" placeholder="标题" />
+            </div>
+            <textarea id="knowledgeContentInput" rows="3" placeholder="写入背景、风格规则或场景反应..." required></textarea>
+            <div class="knowledge-controls">
+              <input id="knowledgeTagsInput" type="text" placeholder="标签，逗号分隔" />
+              <button type="submit">保存</button>
+            </div>
+          </form>
+          <div id="knowledgeList" class="knowledge-list"></div>
+        </section>
+        <section class="debug-section">
+          <h3>候选回复</h3>
+          <div id="candidateList" class="candidate-list"></div>
+        </section>
+        <section class="debug-section">
+          <h3>检索命中</h3>
+          <div id="retrievalList" class="retrieval-list"></div>
+        </section>
+        <section class="debug-section">
+          <h3>原始 Debug</h3>
+          <pre id="rawDebug" class="raw-debug">{}</pre>
+        </section>
+      </aside>
+    </div>
+
+    <div id="settingsOverlay" class="settings-overlay" aria-hidden="true">
+      <aside class="settings-drawer" aria-label="设置">
+        <div class="settings-header">
+          <div>
+            <p class="eyebrow">Settings</p>
+            <h2>设置</h2>
+          </div>
+          <button id="closeSettingsButton" class="icon-button muted" type="button" title="关闭">×</button>
+        </div>
+
+        <section class="settings-section">
+          <h3>聊天</h3>
+          <label class="setting-row" for="settingsCharacterSelect">
+            <span>角色</span>
+            <select id="settingsCharacterSelect" class="select"></select>
+          </label>
+          <label class="setting-row">
+            <span>生成语音</span>
+            <input id="settingsVoiceToggle" type="checkbox" />
+          </label>
+          <button id="clearCurrentSessionButton" class="wide-button secondary" type="button">清空当前会话</button>
+        </section>
+
+        <section class="settings-section">
+          <h3>状态</h3>
+          <div id="appStatusInfo" class="status-grid"></div>
+        </section>
+
+        <section class="settings-section">
+          <h3>开发</h3>
+          <label class="setting-row">
+            <span>显示调试面板</span>
+            <input id="settingsDebugToggle" type="checkbox" />
+          </label>
+          <p class="settings-note">调试面板会显示数据库、知识库、候选回复、prompt 和 raw debug。</p>
+        </section>
+      </aside>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,795 @@
+const state = {
+  currentSessionId: null,
+  currentTurnId: null,
+  memorySuggestions: [],
+  characters: [],
+  sessions: [],
+};
+
+const elements = {
+  activeSessionTitle: document.querySelector("#activeSessionTitle"),
+  appStatusInfo: document.querySelector("#appStatusInfo"),
+  candidateList: document.querySelector("#candidateList"),
+  characterJsonInput: document.querySelector("#characterJsonInput"),
+  characterSelect: document.querySelector("#characterSelect"),
+  chatForm: document.querySelector("#chatForm"),
+  clearKnowledgeButton: document.querySelector("#clearKnowledgeButton"),
+  clearCurrentSessionButton: document.querySelector("#clearCurrentSessionButton"),
+  clearSessionsButton: document.querySelector("#clearSessionsButton"),
+  closeSettingsButton: document.querySelector("#closeSettingsButton"),
+  databaseInfo: document.querySelector("#databaseInfo"),
+  deleteSessionButton: document.querySelector("#deleteSessionButton"),
+  feedbackForm: document.querySelector("#feedbackForm"),
+  feedbackNoteInput: document.querySelector("#feedbackNoteInput"),
+  feedbackScoreInput: document.querySelector("#feedbackScoreInput"),
+  knowledgeContentInput: document.querySelector("#knowledgeContentInput"),
+  knowledgeForm: document.querySelector("#knowledgeForm"),
+  importKnowledgeButton: document.querySelector("#importKnowledgeButton"),
+  knowledgeList: document.querySelector("#knowledgeList"),
+  knowledgeTagsInput: document.querySelector("#knowledgeTagsInput"),
+  knowledgeTitleInput: document.querySelector("#knowledgeTitleInput"),
+  knowledgeTypeSelect: document.querySelector("#knowledgeTypeSelect"),
+  memoryForm: document.querySelector("#memoryForm"),
+  memoryImportanceInput: document.querySelector("#memoryImportanceInput"),
+  memoryConfirmList: document.querySelector("#memoryConfirmList"),
+  memoryInput: document.querySelector("#memoryInput"),
+  memoryList: document.querySelector("#memoryList"),
+  memorySuggestionList: document.querySelector("#memorySuggestionList"),
+  memoryTagsInput: document.querySelector("#memoryTagsInput"),
+  messageInput: document.querySelector("#messageInput"),
+  messages: document.querySelector("#messages"),
+  newSessionButton: document.querySelector("#newSessionButton"),
+  promptToggle: document.querySelector("#promptToggle"),
+  rawDebug: document.querySelector("#rawDebug"),
+  loadCharacterButton: document.querySelector("#loadCharacterButton"),
+  refreshMemoriesButton: document.querySelector("#refreshMemoriesButton"),
+  refreshKnowledgeButton: document.querySelector("#refreshKnowledgeButton"),
+  refreshSessionsButton: document.querySelector("#refreshSessionsButton"),
+  retrievalList: document.querySelector("#retrievalList"),
+  sendButton: document.querySelector("#sendButton"),
+  sessionList: document.querySelector("#sessionList"),
+  saveCharacterButton: document.querySelector("#saveCharacterButton"),
+  settingsButton: document.querySelector("#settingsButton"),
+  settingsCharacterSelect: document.querySelector("#settingsCharacterSelect"),
+  settingsDebugToggle: document.querySelector("#settingsDebugToggle"),
+  settingsOverlay: document.querySelector("#settingsOverlay"),
+  settingsVoiceToggle: document.querySelector("#settingsVoiceToggle"),
+  statusText: document.querySelector("#statusText"),
+  voiceToggle: document.querySelector("#voiceToggle"),
+  voiceTestEmotionSelect: document.querySelector("#voiceTestEmotionSelect"),
+  voiceTestForm: document.querySelector("#voiceTestForm"),
+  voiceTestResult: document.querySelector("#voiceTestResult"),
+  voiceTestTextInput: document.querySelector("#voiceTestTextInput"),
+};
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = payload.detail || `${response.status} ${response.statusText}`;
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return payload;
+}
+
+function setStatus(text) {
+  elements.statusText.textContent = text;
+}
+
+function setDebugMode(enabled) {
+  document.body.classList.toggle("debug-mode", enabled);
+  document.body.classList.toggle("user-mode", !enabled);
+  elements.settingsDebugToggle.checked = enabled;
+  window.localStorage.setItem("roleChatbotDebugMode", enabled ? "1" : "0");
+}
+
+function setSettingsOpen(open) {
+  elements.settingsOverlay.classList.toggle("open", open);
+  elements.settingsOverlay.setAttribute("aria-hidden", open ? "false" : "true");
+  if (open) {
+    loadAppStatus();
+  }
+}
+
+function getCharacterId() {
+  return elements.settingsCharacterSelect.value || elements.characterSelect.value || "role01";
+}
+
+function setCharacterId(characterId) {
+  elements.characterSelect.value = characterId;
+  elements.settingsCharacterSelect.value = characterId;
+}
+
+function setVoiceEnabled(enabled) {
+  elements.voiceToggle.checked = enabled;
+  elements.settingsVoiceToggle.checked = enabled;
+  window.localStorage.setItem("roleChatbotVoice", enabled ? "1" : "0");
+}
+
+function friendlyError(error) {
+  const message = error?.message || String(error);
+  if (message.includes("PostgreSQL is not ready")) {
+    return "数据库还没准备好。请确认 Docker Desktop 已启动，并重新运行启动脚本。";
+  }
+  if (message.includes("Missing reference audio")) {
+    return "还没有放入语音参考音频。请先把 ref_001.wav 和 ref_001.txt 放到对应情绪目录。";
+  }
+  if (message.includes("GPT-SoVITS")) {
+    return "语音服务暂时不可用。可以先关闭语音开关继续文字聊天。";
+  }
+  if (message.includes("LLM request failed")) {
+    return "AI 接口调用失败。请检查 API Key、模型名或网络连接。";
+  }
+  return message;
+}
+
+function renderCharacters() {
+  const options = state.characters
+    .map((character) => {
+      return `<option value="${escapeHtml(character.id)}">${escapeHtml(character.display_name)}</option>`;
+    })
+    .join("");
+  elements.characterSelect.innerHTML = options;
+  elements.settingsCharacterSelect.innerHTML = options;
+}
+
+function renderSessions() {
+  if (!state.sessions.length) {
+    elements.sessionList.innerHTML = `<div class="empty-state">暂无会话</div>`;
+    return;
+  }
+
+  elements.sessionList.innerHTML = state.sessions
+    .map((session) => {
+      const activeClass = session.id === state.currentSessionId ? " active" : "";
+      const title = session.last_user_message || session.id;
+      const subtitle = session.last_reply || `${session.turn_count} 轮`;
+      return `
+        <button class="session-item${activeClass}" type="button" data-session-id="${escapeHtml(session.id)}">
+          <span class="session-title">${escapeHtml(title)}</span>
+          <span class="session-subtitle">${escapeHtml(subtitle)}</span>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderDatabaseInfo(info) {
+  elements.databaseInfo.innerHTML = `
+    <div class="database-row"><span>Backend</span><strong>${escapeHtml(info.database_backend || "")}</strong></div>
+    <div class="database-row"><span>Sessions</span><strong>${escapeHtml(info.session_count ?? 0)}</strong></div>
+    <div class="database-row"><span>Turns</span><strong>${escapeHtml(info.turn_count ?? 0)}</strong></div>
+    <div class="database-row"><span>Memories</span><strong>${escapeHtml(info.memory_count ?? 0)}</strong></div>
+    <div class="database-row"><span>Knowledge</span><strong>${escapeHtml(info.knowledge_count ?? 0)}</strong></div>
+    <div class="database-row"><span>Feedback</span><strong>${escapeHtml(info.feedback_count ?? 0)}</strong></div>
+    <div class="database-path">${escapeHtml(info.database_url || "")}</div>
+  `;
+}
+
+function renderMemories(memories) {
+  if (!memories.length) {
+    elements.memoryList.innerHTML = `<div class="empty-state">暂无长期记忆</div>`;
+    return;
+  }
+
+  elements.memoryList.innerHTML = memories
+    .map((memory) => {
+      const tags = Array.isArray(memory.tags) && memory.tags.length ? memory.tags.join(", ") : "无标签";
+      return `
+        <article class="memory-card">
+          <div class="memory-top">
+            <span>${escapeHtml(memory.memory_type || "note")}</span>
+            <strong>${escapeHtml(memory.importance)}</strong>
+          </div>
+          <p>${escapeHtml(memory.content)}</p>
+          <small>${escapeHtml(tags)}</small>
+          <button class="text-button danger" type="button" data-memory-id="${escapeHtml(memory.id)}">删除</button>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderMemorySuggestions(suggestions) {
+  state.memorySuggestions = suggestions || [];
+  if (!state.memorySuggestions.length) {
+    elements.memorySuggestionList.innerHTML = "";
+    return;
+  }
+
+  elements.memorySuggestionList.innerHTML = state.memorySuggestions
+    .map((suggestion, index) => {
+      return `
+        <article class="memory-suggestion">
+          <p>${escapeHtml(suggestion.content || "")}</p>
+          <button class="text-button" type="button" data-suggestion-index="${index}">保存建议</button>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderMemoryConfirmations(suggestions) {
+  if (!suggestions || !suggestions.length) {
+    elements.memoryConfirmList.innerHTML = "";
+    return;
+  }
+
+  elements.memoryConfirmList.innerHTML = suggestions
+    .map((suggestion, index) => {
+      return `
+        <article class="memory-confirm">
+          <div>
+            <strong>要记住这件事吗？</strong>
+            <p>${escapeHtml(suggestion.content || "")}</p>
+          </div>
+          <div class="memory-confirm-actions">
+            <button class="text-button" type="button" data-confirm-memory="${index}">记住</button>
+            <button class="text-button danger" type="button" data-dismiss-memory="${index}">忽略</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderKnowledge(items) {
+  if (!items.length) {
+    elements.knowledgeList.innerHTML = `<div class="empty-state">暂无数据库知识</div>`;
+    return;
+  }
+
+  elements.knowledgeList.innerHTML = items
+    .map((item) => {
+      const tags = Array.isArray(item.tags) && item.tags.length ? item.tags.join(", ") : "无标签";
+      return `
+        <article class="knowledge-card">
+          <div class="memory-top">
+            <span>${escapeHtml(item.source_type)}</span>
+            <strong>#${escapeHtml(item.id)}</strong>
+          </div>
+          <h4>${escapeHtml(item.title || "未命名")}</h4>
+          <p>${escapeHtml(item.content)}</p>
+          <small>${escapeHtml(tags)}</small>
+          <button class="text-button danger" type="button" data-knowledge-id="${escapeHtml(item.id)}">删除</button>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderMessages(turns) {
+  if (!turns.length) {
+    elements.messages.innerHTML = `<div class="empty-state centered">开始一轮新对话</div>`;
+    return;
+  }
+
+  elements.messages.innerHTML = turns
+    .map((turn) => {
+      const audioPath = turn.debug?.audio_path;
+      const audio = audioPath
+        ? `<audio class="audio-player" controls src="${escapeHtml(audioPath)}"></audio>`
+        : "";
+      return `
+        <article class="message-pair">
+          <div class="bubble user">${escapeHtml(turn.user_message)}</div>
+          <div class="bubble assistant">
+            <div>${escapeHtml(turn.reply)}</div>
+            <span class="emotion">${escapeHtml(turn.emotion)}</span>
+            ${audio}
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+  elements.messages.scrollTop = elements.messages.scrollHeight;
+}
+
+function renderDebugFromTurn(turn) {
+  if (!turn) {
+    state.currentTurnId = null;
+    renderDebug({ candidates: [], debug: {} });
+    return;
+  }
+  state.currentTurnId = turn.id;
+  renderDebug({
+    candidates: turn.candidates || [],
+    debug: turn.debug || {},
+  });
+}
+
+function renderDebug(payload) {
+  const candidates = payload.candidates || [];
+  const debug = payload.debug || {};
+  const judge = debug.style_judge || {};
+  const bestIndex = Number.isInteger(judge.best_index) ? judge.best_index : -1;
+
+  elements.candidateList.innerHTML = candidates.length
+    ? candidates
+        .map((candidate, index) => {
+          const score = Array.isArray(judge.scores) ? judge.scores[index]?.total : null;
+          const selectedClass = index === bestIndex ? " selected" : "";
+          return `
+            <article class="candidate${selectedClass}">
+              <div class="candidate-top">
+                <span>#${index + 1}</span>
+                <span>${escapeHtml(candidate.emotion || "neutral")}${score ? ` · ${escapeHtml(score)}` : ""}</span>
+              </div>
+              <p>${escapeHtml(candidate.reply || "")}</p>
+              <small>${escapeHtml(candidate.reason || "")}</small>
+            </article>
+          `;
+        })
+        .join("")
+    : `<div class="empty-state">暂无候选</div>`;
+
+  const retrievalRows = [
+    ["Lore", debug.used_lore],
+    ["Dialogues", debug.used_dialogues],
+    ["Reactions", debug.used_reactions],
+    ["Memories", debug.used_memories],
+    ["History", debug.history_count == null ? [] : [debug.history_count]],
+  ];
+  elements.retrievalList.innerHTML = retrievalRows
+    .map(([label, values]) => {
+      const ids = Array.isArray(values) && values.length ? values.join(", ") : "无";
+      return `<div class="retrieval-row"><span>${label}</span><strong>${escapeHtml(ids)}</strong></div>`;
+    })
+    .join("");
+  if (judge && Object.keys(judge).length) {
+    elements.retrievalList.insertAdjacentHTML(
+      "beforeend",
+      `<div class="retrieval-row"><span>Style</span><strong>${escapeHtml(judge.scores?.[bestIndex]?.total ?? "无")}</strong></div>`,
+    );
+    elements.retrievalList.insertAdjacentHTML(
+      "beforeend",
+      `<div class="retrieval-row"><span>Rewrite</span><strong>${judge.rewritten ? "是" : "否"}</strong></div>`,
+    );
+  }
+  elements.rawDebug.textContent = JSON.stringify(debug, null, 2);
+  renderMemorySuggestions(debug.memory_suggestions || []);
+  renderMemoryConfirmations(debug.memory_suggestions || []);
+}
+
+async function loadCharacters() {
+  const payload = await requestJson("/characters");
+  state.characters = payload.characters || [];
+  renderCharacters();
+}
+
+async function loadCharacterCard() {
+  const characterId = getCharacterId();
+  const payload = await requestJson(`/characters/${encodeURIComponent(characterId)}`);
+  elements.characterJsonInput.value = JSON.stringify(payload, null, 2);
+}
+
+async function saveCharacterCard() {
+  const characterId = getCharacterId();
+  const payload = JSON.parse(elements.characterJsonInput.value);
+  await requestJson(`/characters/${encodeURIComponent(characterId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  await loadCharacters();
+  setCharacterId(characterId);
+  await loadCharacterCard();
+}
+
+async function loadSessions() {
+  const payload = await requestJson("/debug/sessions");
+  state.sessions = payload.sessions || [];
+  renderSessions();
+}
+
+async function loadDatabaseInfo() {
+  const payload = await requestJson("/debug/database");
+  renderDatabaseInfo(payload);
+}
+
+async function loadAppStatus() {
+  const [health, database] = await Promise.all([
+    requestJson("/health").catch((error) => ({ status: friendlyError(error), postgres: false })),
+    requestJson("/debug/database").catch((error) => ({ error: friendlyError(error) })),
+  ]);
+
+  elements.appStatusInfo.innerHTML = `
+    <div class="status-row"><span>后端</span><strong>${escapeHtml(health.status || "unknown")}</strong></div>
+    <div class="status-row"><span>PostgreSQL</span><strong>${health.postgres ? "可用" : "不可用"}</strong></div>
+    <div class="status-row"><span>会话</span><strong>${escapeHtml(database.session_count ?? "-")}</strong></div>
+    <div class="status-row"><span>记忆</span><strong>${escapeHtml(database.memory_count ?? "-")}</strong></div>
+  `;
+}
+
+async function loadMemories() {
+  const characterId = getCharacterId();
+  const payload = await requestJson(`/memory?character_id=${encodeURIComponent(characterId)}`);
+  renderMemories(payload.memories || []);
+}
+
+async function loadKnowledge() {
+  const characterId = getCharacterId();
+  const payload = await requestJson(`/knowledge?character_id=${encodeURIComponent(characterId)}`);
+  renderKnowledge(payload.items || []);
+}
+
+async function loadSession(sessionId) {
+  state.currentSessionId = sessionId;
+  elements.activeSessionTitle.textContent = `会话 ${sessionId.slice(0, 8)}`;
+  const payload = await requestJson(`/debug/sessions/${encodeURIComponent(sessionId)}/turns`);
+  renderMessages(payload.turns || []);
+  renderDebugFromTurn((payload.turns || []).at(-1));
+  renderSessions();
+}
+
+function startNewSession() {
+  state.currentSessionId = null;
+  state.currentTurnId = null;
+  elements.activeSessionTitle.textContent = "新会话";
+  elements.messages.innerHTML = `<div class="empty-state centered">开始一轮新对话</div>`;
+  renderDebug({ candidates: [], debug: {} });
+  renderMemoryConfirmations([]);
+  renderSessions();
+  elements.messageInput.focus();
+}
+
+async function sendMessage(message) {
+  const voice = elements.voiceToggle.checked;
+  const body = {
+    character_id: getCharacterId(),
+    message,
+    debug_prompt: elements.promptToggle.checked,
+  };
+  if (voice) {
+    body.voice = true;
+  }
+  if (state.currentSessionId) {
+    body.session_id = state.currentSessionId;
+  }
+
+  setStatus("Sending");
+  elements.sendButton.disabled = true;
+  const payload = await requestJson(voice ? "/chat" : "/chat/text", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  state.currentSessionId = payload.session_id;
+  state.currentTurnId = payload.turn_id;
+  elements.activeSessionTitle.textContent = `会话 ${payload.session_id.slice(0, 8)}`;
+  await loadSessions();
+  await loadDatabaseInfo();
+  await loadMemories();
+  await loadKnowledge();
+  await loadSession(payload.session_id);
+  renderDebug(payload);
+  setStatus(payload.debug?.mode || "Ready");
+}
+
+elements.chatForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = elements.messageInput.value.trim();
+  if (!message) {
+    return;
+  }
+
+  elements.messageInput.value = "";
+  elements.messages.insertAdjacentHTML(
+    "beforeend",
+    `<article class="message-pair pending"><div class="bubble user">${escapeHtml(message)}</div><div class="bubble assistant">...</div></article>`,
+  );
+  elements.messages.scrollTop = elements.messages.scrollHeight;
+
+  try {
+    await sendMessage(message);
+  } catch (error) {
+    setStatus("Error");
+    elements.messages.insertAdjacentHTML(
+      "beforeend",
+      `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`,
+    );
+  } finally {
+    elements.sendButton.disabled = false;
+    elements.messageInput.focus();
+  }
+});
+
+elements.newSessionButton.addEventListener("click", startNewSession);
+elements.settingsButton.addEventListener("click", () => setSettingsOpen(true));
+elements.closeSettingsButton.addEventListener("click", () => setSettingsOpen(false));
+elements.settingsOverlay.addEventListener("click", (event) => {
+  if (event.target === elements.settingsOverlay) {
+    setSettingsOpen(false);
+  }
+});
+elements.settingsDebugToggle.addEventListener("change", () => {
+  setDebugMode(elements.settingsDebugToggle.checked);
+});
+elements.voiceToggle.addEventListener("change", () => setVoiceEnabled(elements.voiceToggle.checked));
+elements.settingsVoiceToggle.addEventListener("change", () => {
+  setVoiceEnabled(elements.settingsVoiceToggle.checked);
+});
+elements.settingsCharacterSelect.addEventListener("change", async () => {
+  setCharacterId(elements.settingsCharacterSelect.value);
+  await loadMemories();
+  await loadKnowledge();
+  await loadCharacterCard();
+});
+elements.refreshSessionsButton.addEventListener("click", async () => {
+  await loadSessions();
+  await loadDatabaseInfo();
+});
+elements.deleteSessionButton.addEventListener("click", async () => {
+  if (!state.currentSessionId) {
+    return;
+  }
+  const ok = window.confirm("删除当前会话记录？");
+  if (!ok) {
+    return;
+  }
+  await requestJson(`/debug/sessions/${encodeURIComponent(state.currentSessionId)}`, {
+    method: "DELETE",
+  });
+  await loadSessions();
+  await loadDatabaseInfo();
+  startNewSession();
+});
+elements.clearCurrentSessionButton.addEventListener("click", async () => {
+  if (state.currentSessionId) {
+    await requestJson(`/debug/sessions/${encodeURIComponent(state.currentSessionId)}`, {
+      method: "DELETE",
+    });
+    await loadSessions();
+    await loadDatabaseInfo();
+  }
+  startNewSession();
+  setSettingsOpen(false);
+});
+elements.clearSessionsButton.addEventListener("click", async () => {
+  const ok = window.confirm("清空全部会话记录？");
+  if (!ok) {
+    return;
+  }
+  await requestJson("/debug/sessions", {
+    method: "DELETE",
+  });
+  await loadSessions();
+  await loadDatabaseInfo();
+  startNewSession();
+});
+elements.refreshMemoriesButton.addEventListener("click", loadMemories);
+elements.refreshKnowledgeButton.addEventListener("click", loadKnowledge);
+elements.importKnowledgeButton.addEventListener("click", async () => {
+  const characterId = getCharacterId();
+  await requestJson(`/knowledge/import-jsonl?character_id=${encodeURIComponent(characterId)}`, {
+    method: "POST",
+  });
+  await loadKnowledge();
+  await loadDatabaseInfo();
+});
+elements.clearKnowledgeButton.addEventListener("click", async () => {
+  const ok = window.confirm("清空当前角色的数据库知识库？");
+  if (!ok) {
+    return;
+  }
+  const characterId = getCharacterId();
+  await requestJson(`/knowledge?character_id=${encodeURIComponent(characterId)}`, {
+    method: "DELETE",
+  });
+  await loadKnowledge();
+  await loadDatabaseInfo();
+});
+elements.loadCharacterButton.addEventListener("click", loadCharacterCard);
+elements.saveCharacterButton.addEventListener("click", async () => {
+  try {
+    await saveCharacterCard();
+    setStatus("Character saved");
+  } catch (error) {
+    setStatus("Error");
+    window.alert(friendlyError(error));
+  }
+});
+elements.memoryForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const content = elements.memoryInput.value.trim();
+  if (!content) {
+    return;
+  }
+  const tags = elements.memoryTagsInput.value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  await requestJson("/memory", {
+    method: "POST",
+    body: JSON.stringify({
+      character_id: getCharacterId(),
+      content,
+      memory_type: "note",
+      importance: Number(elements.memoryImportanceInput.value || 5),
+      tags,
+    }),
+  });
+  elements.memoryInput.value = "";
+  elements.memoryTagsInput.value = "";
+  await loadMemories();
+  await loadDatabaseInfo();
+});
+elements.memoryList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-memory-id]");
+  if (!button) {
+    return;
+  }
+  await requestJson(`/memory/${encodeURIComponent(button.dataset.memoryId)}`, {
+    method: "DELETE",
+  });
+  await loadMemories();
+  await loadDatabaseInfo();
+});
+elements.knowledgeForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const content = elements.knowledgeContentInput.value.trim();
+  if (!content) {
+    return;
+  }
+  const tags = elements.knowledgeTagsInput.value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  await requestJson("/knowledge", {
+    method: "POST",
+    body: JSON.stringify({
+      character_id: getCharacterId(),
+      source_type: elements.knowledgeTypeSelect.value || "lore",
+      title: elements.knowledgeTitleInput.value.trim(),
+      content,
+      tags,
+    }),
+  });
+  elements.knowledgeTitleInput.value = "";
+  elements.knowledgeContentInput.value = "";
+  elements.knowledgeTagsInput.value = "";
+  await loadKnowledge();
+  await loadDatabaseInfo();
+});
+elements.knowledgeList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-knowledge-id]");
+  if (!button) {
+    return;
+  }
+  await requestJson(`/knowledge/${encodeURIComponent(button.dataset.knowledgeId)}`, {
+    method: "DELETE",
+  });
+  await loadKnowledge();
+  await loadDatabaseInfo();
+});
+async function saveSuggestion(index) {
+  const suggestion = state.memorySuggestions[Number(index)];
+  if (!suggestion) {
+    return;
+  }
+  await requestJson("/memory", {
+    method: "POST",
+    body: JSON.stringify({
+      character_id: getCharacterId(),
+      content: suggestion.content,
+      memory_type: suggestion.memory_type || "note",
+      importance: Number(suggestion.importance || 5),
+      tags: suggestion.tags || [],
+    }),
+  });
+  state.memorySuggestions = state.memorySuggestions.filter((_, itemIndex) => itemIndex !== Number(index));
+  renderMemoryConfirmations(state.memorySuggestions);
+  renderMemorySuggestions(state.memorySuggestions);
+  await loadMemories();
+  await loadDatabaseInfo();
+}
+
+elements.memoryConfirmList.addEventListener("click", async (event) => {
+  const saveButton = event.target.closest("[data-confirm-memory]");
+  const dismissButton = event.target.closest("[data-dismiss-memory]");
+  if (saveButton) {
+    await saveSuggestion(saveButton.dataset.confirmMemory);
+    return;
+  }
+  if (dismissButton) {
+    state.memorySuggestions = state.memorySuggestions.filter(
+      (_, index) => index !== Number(dismissButton.dataset.dismissMemory),
+    );
+    renderMemoryConfirmations(state.memorySuggestions);
+    renderMemorySuggestions(state.memorySuggestions);
+  }
+});
+
+elements.memorySuggestionList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-suggestion-index]");
+  if (!button) {
+    return;
+  }
+  await saveSuggestion(button.dataset.suggestionIndex);
+});
+elements.feedbackForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.currentTurnId) {
+    window.alert("先选择或发送一轮对话。");
+    return;
+  }
+  await requestJson(`/debug/turns/${encodeURIComponent(state.currentTurnId)}/feedback`, {
+    method: "POST",
+    body: JSON.stringify({
+      score: Number(elements.feedbackScoreInput.value || 8),
+      note: elements.feedbackNoteInput.value.trim(),
+    }),
+  });
+  elements.feedbackNoteInput.value = "";
+  await loadDatabaseInfo();
+});
+elements.voiceTestForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const text = elements.voiceTestTextInput.value.trim();
+  if (!text) {
+    return;
+  }
+  elements.voiceTestResult.innerHTML = `<div class="empty-state">生成中...</div>`;
+  try {
+    const payload = await requestJson("/voice/test", {
+      method: "POST",
+      body: JSON.stringify({
+        character_id: getCharacterId(),
+        text,
+        emotion: elements.voiceTestEmotionSelect.value || "neutral",
+      }),
+    });
+    elements.voiceTestResult.innerHTML = `
+      <audio class="audio-player" controls src="${escapeHtml(payload.public_url)}"></audio>
+      <div class="database-path">${escapeHtml(payload.audio_path || "")}</div>
+    `;
+  } catch (error) {
+    elements.voiceTestResult.innerHTML = `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`;
+  }
+});
+elements.characterSelect.addEventListener("change", async () => {
+  setCharacterId(elements.characterSelect.value);
+  await loadMemories();
+  await loadKnowledge();
+  await loadCharacterCard();
+});
+elements.sessionList.addEventListener("click", async (event) => {
+  const item = event.target.closest("[data-session-id]");
+  if (!item) {
+    return;
+  }
+  await loadSession(item.dataset.sessionId);
+});
+
+async function boot() {
+  try {
+    setDebugMode(window.localStorage.getItem("roleChatbotDebugMode") === "1");
+    setVoiceEnabled(window.localStorage.getItem("roleChatbotVoice") === "1");
+    await loadCharacters();
+    await loadCharacterCard();
+    await loadSessions();
+    await loadDatabaseInfo();
+    await loadMemories();
+    await loadKnowledge();
+    startNewSession();
+  } catch (error) {
+    setStatus("Error");
+    elements.messages.innerHTML = `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`;
+  }
+}
+
+boot();

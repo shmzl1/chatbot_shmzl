@@ -1,0 +1,65 @@
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+!backend/.env.example
+
+# Python environments and cache
+.venv/
+venv/
+env/
+backend/.venv/
+backend/venv/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Node dependencies and build output
+node_modules/
+dist/
+build/
+frontend/**/dist/
+frontend/**/build/
+
+# Logs and runtime output
+*.log
+logs/
+backend/logs/
+backend/outputs/
+
+# IDE and system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Private keys and certificates
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+
+# Local databases, vector stores, and generated data
+*.sqlite
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.db
+postgres_data/
+qdrant_storage/
+
+# Temporary files, upload cache, and local screenshots
+tmp/
+temp/
+.cache/
+uploads/
+backend/uploads/
+image/
+
+# Local voice/raw assets that may contain private user data
+raw/
+backend/raw/
+backend/data/voice_refs/**/*.wav
+backend/data/voice_refs/**/*.mp3
+backend/data/voice_refs/**/*.flac
+backend/data/voice_clean/
