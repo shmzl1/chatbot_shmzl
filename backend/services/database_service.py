@@ -12,7 +12,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
 from core.config import settings
-from core.schemas import CandidateReply, ChatSessionSummary, ChatTurnRecord, MemoryRecord
+from core.schemas import CandidateReply, ChatSessionSummary, ChatTurnRecord, MemoryRecord, UserRecord
 from core.schemas import KnowledgeRecord
 
 
@@ -223,6 +223,91 @@ class DatabaseService:
             return True
         except Exception:
             return False
+
+    def create_user(
+        self,
+        *,
+        username: str,
+        email: Optional[str],
+        password_hash: str,
+    ) -> UserRecord:
+        self._ensure_database()
+        normalized_username = username.strip()
+        normalized_email = email.strip().lower() if email else None
+        now = _now()
+
+        if self.get_user_by_username(normalized_username):
+            raise HTTPException(status_code=409, detail="用户名已存在")
+        if normalized_email and self.get_user_by_email(normalized_email):
+            raise HTTPException(status_code=409, detail="邮箱已存在")
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO users (
+                    username,
+                    email,
+                    password_hash,
+                    avatar_url,
+                    created_at,
+                    updated_at
+                )
+                VALUES (%s, %s, %s, NULL, %s, %s)
+                RETURNING *
+                """,
+                (normalized_username, normalized_email, password_hash, now, now),
+            ).fetchone()
+        return self._row_to_user(row)
+
+    def get_user_by_username(self, username: str) -> Optional[UserRecord]:
+        self._ensure_database()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM users WHERE LOWER(username) = LOWER(%s) LIMIT 1",
+                (username.strip(),),
+            ).fetchone()
+        return self._row_to_user(row) if row else None
+
+    def get_user_by_email(self, email: str) -> Optional[UserRecord]:
+        self._ensure_database()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM users WHERE email IS NOT NULL AND LOWER(email) = LOWER(%s) LIMIT 1",
+                (email.strip(),),
+            ).fetchone()
+        return self._row_to_user(row) if row else None
+
+    def get_user_by_login(self, username_or_email: str) -> Optional[UserRecord]:
+        value = username_or_email.strip()
+        if "@" in value:
+            return self.get_user_by_email(value)
+        return self.get_user_by_username(value)
+
+    def get_user_by_id(self, user_id: int) -> Optional[UserRecord]:
+        self._ensure_database()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM users WHERE id = %s LIMIT 1",
+                (user_id,),
+            ).fetchone()
+        return self._row_to_user(row) if row else None
+
+    def update_user_avatar(self, user_id: int, avatar_url: str) -> UserRecord:
+        self._ensure_database()
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                UPDATE users
+                SET avatar_url = %s,
+                    updated_at = %s
+                WHERE id = %s
+                RETURNING *
+                """,
+                (avatar_url, _now(), user_id),
+            ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        return self._row_to_user(row)
 
     def delete_session(self, session_id: str) -> int:
         self._ensure_database()
@@ -641,6 +726,32 @@ class DatabaseService:
         with self._connect() as connection:
             connection.execute(
                 """
+                CREATE TABLE IF NOT EXISTS users (
+                    id BIGSERIAL PRIMARY KEY,
+                    username TEXT NOT NULL,
+                    email TEXT,
+                    password_hash TEXT NOT NULL,
+                    avatar_url TEXT,
+                    created_at TIMESTAMPTZ NOT NULL,
+                    updated_at TIMESTAMPTZ NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower
+                ON users (LOWER(username))
+                """
+            )
+            connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
+                ON users (LOWER(email))
+                WHERE email IS NOT NULL AND email <> ''
+                """
+            )
+            connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS chat_sessions (
                     id TEXT PRIMARY KEY,
                     character_id TEXT NOT NULL,
@@ -771,6 +882,17 @@ class DatabaseService:
             title=row["title"],
             content=row["content"],
             tags=tags if isinstance(tags, list) else [],
+            created_at=self._as_text(row["created_at"]),
+            updated_at=self._as_text(row["updated_at"]),
+        )
+
+    def _row_to_user(self, row: Dict[str, Any]) -> UserRecord:
+        return UserRecord(
+            id=row["id"],
+            username=row["username"],
+            email=row["email"],
+            password_hash=row["password_hash"],
+            avatar_url=row["avatar_url"],
             created_at=self._as_text(row["created_at"]),
             updated_at=self._as_text(row["updated_at"]),
         )

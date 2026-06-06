@@ -13,6 +13,7 @@ class HealthResponse(BaseModel):
 class CharacterSummary(BaseModel):
     id: str
     display_name: str
+    avatar_url: Optional[str] = None
 
 
 class CharacterListResponse(BaseModel):
@@ -28,6 +29,7 @@ class VoiceConfig(BaseModel):
 class CharacterCard(BaseModel):
     id: str
     display_name: str
+    avatar_url: Optional[str] = None
     core_personality: List[str] = Field(default_factory=list)
     speaking_style: List[str] = Field(default_factory=list)
     relationship_to_user: str = ""
@@ -180,3 +182,42 @@ class TurnFeedbackResponse(BaseModel):
     score: int
     note: str = ""
     created_at: str
+
+
+class UserRegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: Optional[str] = Field(default=None, max_length=254)
+    password: str = Field(..., min_length=6, max_length=128)
+
+
+class UserLoginRequest(BaseModel):
+    username_or_email: str = Field(..., min_length=1, max_length=254)
+    password: str = Field(..., min_length=1, max_length=128)
+
+
+class UserRecord(BaseModel):
+    id: int
+    username: str
+    email: Optional[str] = None
+    password_hash: str
+    avatar_url: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class UserPublic(BaseModel):
+    id: int
+    username: str
+    email: Optional[str] = None
+    avatar_url: Optional[str] = None
+    created_at: str
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserPublic
+
+
+class AvatarUploadResponse(BaseModel):
+    avatar_url: str

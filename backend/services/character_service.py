@@ -25,6 +25,7 @@ class CharacterService:
                 CharacterSummary(
                     id=character.id,
                     display_name=character.display_name,
+                    avatar_url=character.avatar_url,
                 )
             )
 

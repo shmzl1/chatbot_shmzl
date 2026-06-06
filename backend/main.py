@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from api.auth_api import router as auth_router
 from api.chat_api import router as chat_router
 from api.character_api import router as character_router
 from api.debug_api import router as debug_router
@@ -18,6 +19,7 @@ app = FastAPI(
 )
 
 app.include_router(health_router)
+app.include_router(auth_router)
 app.include_router(character_router)
 app.include_router(chat_router)
 app.include_router(debug_router)
@@ -43,4 +45,11 @@ app.mount(
     "/outputs",
     StaticFiles(directory=settings.outputs_dir),
     name="outputs",
+)
+
+settings.upload_dir.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/uploads",
+    StaticFiles(directory=settings.upload_dir),
+    name="uploads",
 )

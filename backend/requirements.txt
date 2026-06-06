@@ -7,3 +7,6 @@ qdrant-client
 openai
 numpy
 psycopg[binary]
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
