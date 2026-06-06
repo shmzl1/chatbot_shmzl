@@ -3,6 +3,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from fastapi import HTTPException
+
 from core.config import settings
 
 
@@ -49,8 +51,13 @@ class RetrievalService:
         top_k: int,
         source: str,
     ) -> List[RetrievalHit]:
-        if top_k <= 0 or not file_path.exists():
+        if top_k <= 0:
             return []
+        if not file_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Retrieval file is missing: {file_path}",
+            )
 
         documents = self._load_jsonl(file_path)
         scored: List[Tuple[int, int, Dict[str, Any], str]] = []
@@ -60,22 +67,19 @@ class RetrievalService:
             scored.append((score, index, payload, text))
 
         positive = [item for item in scored if item[0] > 0]
-        chosen = positive if positive else scored[:top_k]
+        chosen = positive if positive else scored
         chosen = sorted(chosen, key=lambda item: (-item[0], item[1]))[:top_k]
 
-        hits: List[RetrievalHit] = []
-        for score, _, payload, text in chosen:
-            hits.append(
-                {
-                    "id": payload.get("id", ""),
-                    "source": source,
-                    "score": score,
-                    "text": text,
-                    "payload": payload,
-                }
-            )
-
-        return hits
+        return [
+            {
+                "id": payload.get("id", ""),
+                "source": source,
+                "score": score,
+                "text": text,
+                "payload": payload,
+            }
+            for score, _, payload, text in chosen
+        ]
 
     def _load_jsonl(self, file_path: Path) -> List[Dict[str, Any]]:
         documents: List[Dict[str, Any]] = []
@@ -86,13 +90,17 @@ class RetrievalService:
                     continue
                 try:
                     item = json.loads(line)
-                except json.JSONDecodeError:
-                    item = {
-                        "id": f"{file_path.stem}_{line_no}",
-                        "content": line,
-                    }
-                if isinstance(item, dict):
-                    documents.append(item)
+                except json.JSONDecodeError as exc:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Invalid JSONL in {file_path} at line {line_no}: {exc}",
+                    ) from exc
+                if not isinstance(item, dict):
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"JSONL item in {file_path} at line {line_no} must be an object.",
+                    )
+                documents.append(item)
 
         return documents
 

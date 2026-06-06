@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from core.config import settings
-from core.schemas import ChatRequest, ChatTextRequest, ChatTextResponse
+from core.schemas import ChatRequest, ChatTextRequest, ChatTextResponse, UserRecord
+from services.auth_service import get_current_user
 from services.character_service import character_service
 from services.database_service import database_service
 from services.emotion_service import emotion_service
@@ -18,12 +19,18 @@ router = APIRouter(tags=["chat"])
 
 
 @router.post("/chat/text", response_model=ChatTextResponse)
-def chat_text(request: ChatTextRequest) -> ChatTextResponse:
+def chat_text(
+    request: ChatTextRequest,
+    current_user: UserRecord = Depends(get_current_user),
+) -> ChatTextResponse:
     return _run_chat(request=request, voice=False)
 
 
 @router.post("/chat", response_model=ChatTextResponse)
-def chat(request: ChatRequest) -> ChatTextResponse:
+def chat(
+    request: ChatRequest,
+    current_user: UserRecord = Depends(get_current_user),
+) -> ChatTextResponse:
     return _run_chat(request=request, voice=request.voice)
 
 

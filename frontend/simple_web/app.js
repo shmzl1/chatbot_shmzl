@@ -1,4 +1,10 @@
+const TOKEN_KEY = "roleChatbotToken";
+
 const state = {
+  token: window.localStorage.getItem(TOKEN_KEY) || "",
+  hasUser: false,
+  currentUser: null,
+  currentCharacter: null,
   currentSessionId: null,
   currentTurnId: null,
   memorySuggestions: [],
@@ -9,29 +15,41 @@ const state = {
 const elements = {
   activeSessionTitle: document.querySelector("#activeSessionTitle"),
   appStatusInfo: document.querySelector("#appStatusInfo"),
+  authError: document.querySelector("#authError"),
+  authSubtitle: document.querySelector("#authSubtitle"),
+  authTitle: document.querySelector("#authTitle"),
   candidateList: document.querySelector("#candidateList"),
+  characterAvatarInput: document.querySelector("#characterAvatarInput"),
   characterJsonInput: document.querySelector("#characterJsonInput"),
   characterSelect: document.querySelector("#characterSelect"),
   chatForm: document.querySelector("#chatForm"),
-  clearKnowledgeButton: document.querySelector("#clearKnowledgeButton"),
   clearCurrentSessionButton: document.querySelector("#clearCurrentSessionButton"),
+  clearKnowledgeButton: document.querySelector("#clearKnowledgeButton"),
   clearSessionsButton: document.querySelector("#clearSessionsButton"),
   closeSettingsButton: document.querySelector("#closeSettingsButton"),
+  currentCharacterAvatar: document.querySelector("#currentCharacterAvatar"),
+  currentUserAvatar: document.querySelector("#currentUserAvatar"),
+  currentUsername: document.querySelector("#currentUsername"),
   databaseInfo: document.querySelector("#databaseInfo"),
   deleteSessionButton: document.querySelector("#deleteSessionButton"),
   feedbackForm: document.querySelector("#feedbackForm"),
   feedbackNoteInput: document.querySelector("#feedbackNoteInput"),
   feedbackScoreInput: document.querySelector("#feedbackScoreInput"),
+  importKnowledgeButton: document.querySelector("#importKnowledgeButton"),
   knowledgeContentInput: document.querySelector("#knowledgeContentInput"),
   knowledgeForm: document.querySelector("#knowledgeForm"),
-  importKnowledgeButton: document.querySelector("#importKnowledgeButton"),
   knowledgeList: document.querySelector("#knowledgeList"),
   knowledgeTagsInput: document.querySelector("#knowledgeTagsInput"),
   knowledgeTitleInput: document.querySelector("#knowledgeTitleInput"),
   knowledgeTypeSelect: document.querySelector("#knowledgeTypeSelect"),
+  loadCharacterButton: document.querySelector("#loadCharacterButton"),
+  loginForm: document.querySelector("#loginForm"),
+  loginPasswordInput: document.querySelector("#loginPasswordInput"),
+  loginUsernameInput: document.querySelector("#loginUsernameInput"),
+  logoutButton: document.querySelector("#logoutButton"),
+  memoryConfirmList: document.querySelector("#memoryConfirmList"),
   memoryForm: document.querySelector("#memoryForm"),
   memoryImportanceInput: document.querySelector("#memoryImportanceInput"),
-  memoryConfirmList: document.querySelector("#memoryConfirmList"),
   memoryInput: document.querySelector("#memoryInput"),
   memoryList: document.querySelector("#memoryList"),
   memorySuggestionList: document.querySelector("#memorySuggestionList"),
@@ -41,29 +59,33 @@ const elements = {
   newSessionButton: document.querySelector("#newSessionButton"),
   promptToggle: document.querySelector("#promptToggle"),
   rawDebug: document.querySelector("#rawDebug"),
-  loadCharacterButton: document.querySelector("#loadCharacterButton"),
-  refreshMemoriesButton: document.querySelector("#refreshMemoriesButton"),
   refreshKnowledgeButton: document.querySelector("#refreshKnowledgeButton"),
+  refreshMemoriesButton: document.querySelector("#refreshMemoriesButton"),
   refreshSessionsButton: document.querySelector("#refreshSessionsButton"),
   retrievalList: document.querySelector("#retrievalList"),
+  saveCharacterButton: document.querySelector("#saveCharacterButton"),
   sendButton: document.querySelector("#sendButton"),
   sessionList: document.querySelector("#sessionList"),
-  saveCharacterButton: document.querySelector("#saveCharacterButton"),
   settingsButton: document.querySelector("#settingsButton"),
   settingsCharacterSelect: document.querySelector("#settingsCharacterSelect"),
   settingsDebugToggle: document.querySelector("#settingsDebugToggle"),
   settingsOverlay: document.querySelector("#settingsOverlay"),
   settingsVoiceToggle: document.querySelector("#settingsVoiceToggle"),
+  setupForm: document.querySelector("#setupForm"),
+  setupPasswordConfirmInput: document.querySelector("#setupPasswordConfirmInput"),
+  setupPasswordInput: document.querySelector("#setupPasswordInput"),
+  setupUsernameInput: document.querySelector("#setupUsernameInput"),
   statusText: document.querySelector("#statusText"),
-  voiceToggle: document.querySelector("#voiceToggle"),
+  userAvatarInput: document.querySelector("#userAvatarInput"),
   voiceTestEmotionSelect: document.querySelector("#voiceTestEmotionSelect"),
   voiceTestForm: document.querySelector("#voiceTestForm"),
   voiceTestResult: document.querySelector("#voiceTestResult"),
   voiceTestTextInput: document.querySelector("#voiceTestTextInput"),
+  voiceToggle: document.querySelector("#voiceToggle"),
 };
 
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -71,20 +93,76 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function authHeaders(headers = {}) {
+  return state.token ? { Authorization: `Bearer ${state.token}`, ...headers } : headers;
+}
+
 async function requestJson(url, options = {}) {
+  const body = options.body;
+  const isFormData = body instanceof FormData;
   const response = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
     ...options,
+    headers: {
+      ...(!isFormData ? { "Content-Type": "application/json" } : {}),
+      ...authHeaders(options.headers || {}),
+    },
   });
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 401 && !options.skipAuthRedirect) {
+    logout(false, "登录已失效，请重新登录");
+  }
   if (!response.ok) {
-    const detail = payload.detail || `${response.status} ${response.statusText}`;
+    const detail = payload.detail || `${response.status} ${response.statusText} at ${url}`;
     throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
   }
   return payload;
+}
+
+function friendlyError(error) {
+  const message = error?.message || String(error);
+  if (message.includes("PostgreSQL is not ready")) {
+    return "数据库还没准备好。请确认 Docker Desktop 已启动，并已运行 docker compose up -d。";
+  }
+  if (message.includes("Missing reference audio")) {
+    return "还没有放入语音参考音频。可先关闭语音开关继续文字聊天。";
+  }
+  if (message.includes("GPT-SoVITS")) {
+    return "语音服务暂时不可用。可先关闭语音开关继续文字聊天。";
+  }
+  if (message.includes("LLM request failed")) {
+    return "AI 接口调用失败。请检查 API Key、模型名或网络连接。";
+  }
+  return message;
+}
+
+function showAuthError(errorOrMessage) {
+  elements.authError.textContent =
+    typeof errorOrMessage === "string" ? errorOrMessage : friendlyError(errorOrMessage);
+  elements.authError.classList.remove("hidden");
+}
+
+function clearAuthError() {
+  elements.authError.textContent = "";
+  elements.authError.classList.add("hidden");
+}
+
+function showAuthMode(mode, message = "") {
+  clearAuthError();
+  const setup = mode === "setup";
+  elements.setupForm.classList.toggle("hidden", !setup);
+  elements.loginForm.classList.toggle("hidden", setup);
+  elements.authTitle.textContent = setup ? "初始化本地账号" : "本地登录锁";
+  elements.authSubtitle.textContent = setup
+    ? "第一次使用前，先设置唯一的本地账号和密码。"
+    : "请输入本地账号密码后进入聊天。";
+  if (message) {
+    showAuthError(message);
+  }
+}
+
+function setAuthenticated(authenticated) {
+  document.body.classList.toggle("authenticated", authenticated);
+  document.body.classList.toggle("unauthenticated", !authenticated);
 }
 
 function setStatus(text) {
@@ -106,6 +184,12 @@ function setSettingsOpen(open) {
   }
 }
 
+function setVoiceEnabled(enabled) {
+  elements.voiceToggle.checked = enabled;
+  elements.settingsVoiceToggle.checked = enabled;
+  window.localStorage.setItem("roleChatbotVoice", enabled ? "1" : "0");
+}
+
 function getCharacterId() {
   return elements.settingsCharacterSelect.value || elements.characterSelect.value || "role01";
 }
@@ -115,27 +199,38 @@ function setCharacterId(characterId) {
   elements.settingsCharacterSelect.value = characterId;
 }
 
-function setVoiceEnabled(enabled) {
-  elements.voiceToggle.checked = enabled;
-  elements.settingsVoiceToggle.checked = enabled;
-  window.localStorage.setItem("roleChatbotVoice", enabled ? "1" : "0");
+function firstText(text, fallback) {
+  const value = String(text || "").trim();
+  return value ? value.slice(0, 1).toUpperCase() : fallback;
 }
 
-function friendlyError(error) {
-  const message = error?.message || String(error);
-  if (message.includes("PostgreSQL is not ready")) {
-    return "数据库还没准备好。请确认 Docker Desktop 已启动，并重新运行启动脚本。";
+function avatarMarkup(url, label, fallback, size = "") {
+  const safeSize = size ? ` ${size}` : "";
+  if (url) {
+    return `<img class="avatar${safeSize}" src="${escapeHtml(url)}" alt="${escapeHtml(label || "avatar")}" />`;
   }
-  if (message.includes("Missing reference audio")) {
-    return "还没有放入语音参考音频。请先把 ref_001.wav 和 ref_001.txt 放到对应情绪目录。";
-  }
-  if (message.includes("GPT-SoVITS")) {
-    return "语音服务暂时不可用。可以先关闭语音开关继续文字聊天。";
-  }
-  if (message.includes("LLM request failed")) {
-    return "AI 接口调用失败。请检查 API Key、模型名或网络连接。";
-  }
-  return message;
+  return `<span class="avatar${safeSize}" aria-label="${escapeHtml(label || "avatar")}">${escapeHtml(fallback)}</span>`;
+}
+
+function renderUser() {
+  const user = state.currentUser;
+  elements.currentUsername.textContent = user?.username || "未登录";
+  elements.currentUserAvatar.innerHTML = avatarMarkup(
+    user?.avatar_url,
+    user?.username,
+    firstText(user?.username, "我"),
+    "large",
+  );
+}
+
+function renderCharacterPanel() {
+  const character = state.currentCharacter;
+  elements.currentCharacterAvatar.innerHTML = avatarMarkup(
+    character?.avatar_url,
+    character?.display_name,
+    firstText(character?.display_name, "AI"),
+    "large",
+  );
 }
 
 function renderCharacters() {
@@ -153,7 +248,6 @@ function renderSessions() {
     elements.sessionList.innerHTML = `<div class="empty-state">暂无会话</div>`;
     return;
   }
-
   elements.sessionList.innerHTML = state.sessions
     .map((session) => {
       const activeClass = session.id === state.currentSessionId ? " active" : "";
@@ -186,7 +280,6 @@ function renderMemories(memories) {
     elements.memoryList.innerHTML = `<div class="empty-state">暂无长期记忆</div>`;
     return;
   }
-
   elements.memoryList.innerHTML = memories
     .map((memory) => {
       const tags = Array.isArray(memory.tags) && memory.tags.length ? memory.tags.join(", ") : "无标签";
@@ -211,7 +304,6 @@ function renderMemorySuggestions(suggestions) {
     elements.memorySuggestionList.innerHTML = "";
     return;
   }
-
   elements.memorySuggestionList.innerHTML = state.memorySuggestions
     .map((suggestion, index) => {
       return `
@@ -229,7 +321,6 @@ function renderMemoryConfirmations(suggestions) {
     elements.memoryConfirmList.innerHTML = "";
     return;
   }
-
   elements.memoryConfirmList.innerHTML = suggestions
     .map((suggestion, index) => {
       return `
@@ -253,7 +344,6 @@ function renderKnowledge(items) {
     elements.knowledgeList.innerHTML = `<div class="empty-state">暂无数据库知识</div>`;
     return;
   }
-
   elements.knowledgeList.innerHTML = items
     .map((item) => {
       const tags = Array.isArray(item.tags) && item.tags.length ? item.tags.join(", ") : "无标签";
@@ -273,30 +363,35 @@ function renderKnowledge(items) {
     .join("");
 }
 
+function turnMarkup(turn) {
+  const audioPath = turn.debug?.audio_path;
+  const audio = audioPath ? `<audio class="audio-player" controls src="${escapeHtml(audioPath)}"></audio>` : "";
+  const user = state.currentUser || {};
+  const character = state.currentCharacter || {};
+  return `
+    <article class="message-pair">
+      <div class="message-row user">
+        ${avatarMarkup(user.avatar_url, user.username, firstText(user.username, "我"))}
+        <div class="bubble user">${escapeHtml(turn.user_message)}</div>
+      </div>
+      <div class="message-row assistant">
+        ${avatarMarkup(character.avatar_url, character.display_name, firstText(character.display_name, "AI"))}
+        <div class="bubble assistant">
+          <div>${escapeHtml(turn.reply)}</div>
+          <span class="emotion">${escapeHtml(turn.emotion)}</span>
+          ${audio}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
 function renderMessages(turns) {
   if (!turns.length) {
     elements.messages.innerHTML = `<div class="empty-state centered">开始一轮新对话</div>`;
     return;
   }
-
-  elements.messages.innerHTML = turns
-    .map((turn) => {
-      const audioPath = turn.debug?.audio_path;
-      const audio = audioPath
-        ? `<audio class="audio-player" controls src="${escapeHtml(audioPath)}"></audio>`
-        : "";
-      return `
-        <article class="message-pair">
-          <div class="bubble user">${escapeHtml(turn.user_message)}</div>
-          <div class="bubble assistant">
-            <div>${escapeHtml(turn.reply)}</div>
-            <span class="emotion">${escapeHtml(turn.emotion)}</span>
-            ${audio}
-          </div>
-        </article>
-      `;
-    })
-    .join("");
+  elements.messages.innerHTML = turns.map(turnMarkup).join("");
   elements.messages.scrollTop = elements.messages.scrollHeight;
 }
 
@@ -307,10 +402,7 @@ function renderDebugFromTurn(turn) {
     return;
   }
   state.currentTurnId = turn.id;
-  renderDebug({
-    candidates: turn.candidates || [],
-    debug: turn.debug || {},
-  });
+  renderDebug({ candidates: turn.candidates || [], debug: turn.debug || {} });
 }
 
 function renderDebug(payload) {
@@ -318,7 +410,6 @@ function renderDebug(payload) {
   const debug = payload.debug || {};
   const judge = debug.style_judge || {};
   const bestIndex = Number.isInteger(judge.best_index) ? judge.best_index : -1;
-
   elements.candidateList.innerHTML = candidates.length
     ? candidates
         .map((candidate, index) => {
@@ -328,7 +419,7 @@ function renderDebug(payload) {
             <article class="candidate${selectedClass}">
               <div class="candidate-top">
                 <span>#${index + 1}</span>
-                <span>${escapeHtml(candidate.emotion || "neutral")}${score ? ` · ${escapeHtml(score)}` : ""}</span>
+                <span>${escapeHtml(candidate.emotion || "neutral")}${score ? ` / ${escapeHtml(score)}` : ""}</span>
               </div>
               <p>${escapeHtml(candidate.reply || "")}</p>
               <small>${escapeHtml(candidate.reason || "")}</small>
@@ -366,6 +457,11 @@ function renderDebug(payload) {
   renderMemoryConfirmations(debug.memory_suggestions || []);
 }
 
+async function loadMe() {
+  state.currentUser = await requestJson("/auth/me");
+  renderUser();
+}
+
 async function loadCharacters() {
   const payload = await requestJson("/characters");
   state.characters = payload.characters || [];
@@ -375,7 +471,9 @@ async function loadCharacters() {
 async function loadCharacterCard() {
   const characterId = getCharacterId();
   const payload = await requestJson(`/characters/${encodeURIComponent(characterId)}`);
+  state.currentCharacter = payload;
   elements.characterJsonInput.value = JSON.stringify(payload, null, 2);
+  renderCharacterPanel();
 }
 
 async function saveCharacterCard() {
@@ -406,7 +504,6 @@ async function loadAppStatus() {
     requestJson("/health").catch((error) => ({ status: friendlyError(error), postgres: false })),
     requestJson("/debug/database").catch((error) => ({ error: friendlyError(error) })),
   ]);
-
   elements.appStatusInfo.innerHTML = `
     <div class="status-row"><span>后端</span><strong>${escapeHtml(health.status || "unknown")}</strong></div>
     <div class="status-row"><span>PostgreSQL</span><strong>${health.postgres ? "可用" : "不可用"}</strong></div>
@@ -416,14 +513,12 @@ async function loadAppStatus() {
 }
 
 async function loadMemories() {
-  const characterId = getCharacterId();
-  const payload = await requestJson(`/memory?character_id=${encodeURIComponent(characterId)}`);
+  const payload = await requestJson(`/memory?character_id=${encodeURIComponent(getCharacterId())}`);
   renderMemories(payload.memories || []);
 }
 
 async function loadKnowledge() {
-  const characterId = getCharacterId();
-  const payload = await requestJson(`/knowledge?character_id=${encodeURIComponent(characterId)}`);
+  const payload = await requestJson(`/knowledge?character_id=${encodeURIComponent(getCharacterId())}`);
   renderKnowledge(payload.items || []);
 }
 
@@ -432,7 +527,7 @@ async function loadSession(sessionId) {
   elements.activeSessionTitle.textContent = `会话 ${sessionId.slice(0, 8)}`;
   const payload = await requestJson(`/debug/sessions/${encodeURIComponent(sessionId)}/turns`);
   renderMessages(payload.turns || []);
-  renderDebugFromTurn((payload.turns || []).at(-1));
+  renderDebugFromTurn((payload.turns || [])[payload.turns.length - 1]);
   renderSessions();
 }
 
@@ -480,17 +575,153 @@ async function sendMessage(message) {
   setStatus(payload.debug?.mode || "Ready");
 }
 
+async function uploadFile(url, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return requestJson(url, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+async function uploadUserAvatar(file) {
+  await uploadFile("/auth/me/avatar", file);
+  await loadMe();
+  setStatus("用户头像已更新");
+}
+
+async function uploadCharacterAvatar(file) {
+  const characterId = getCharacterId();
+  await uploadFile(`/characters/${encodeURIComponent(characterId)}/avatar`, file);
+  await loadCharacters();
+  setCharacterId(characterId);
+  await loadCharacterCard();
+  if (state.currentSessionId) {
+    await loadSession(state.currentSessionId);
+  }
+  setStatus("角色头像已更新");
+}
+
+async function afterAuth(payload) {
+  state.token = payload.access_token;
+  window.localStorage.setItem(TOKEN_KEY, state.token);
+  state.currentUser = payload.user;
+  setAuthenticated(true);
+  renderUser();
+  await initializeApp();
+}
+
+function logout(callServer = true, message = "") {
+  if (callServer && state.token) {
+    requestJson("/auth/logout", { method: "POST" }).catch(() => {});
+  }
+  state.token = "";
+  state.currentUser = null;
+  window.localStorage.removeItem(TOKEN_KEY);
+  setAuthenticated(false);
+  showAuthMode(state.hasUser ? "login" : "setup", message);
+}
+
+async function initializeApp() {
+  setDebugMode(window.localStorage.getItem("roleChatbotDebugMode") === "1");
+  setVoiceEnabled(window.localStorage.getItem("roleChatbotVoice") === "1");
+  await loadMe();
+  await loadCharacters();
+  await loadCharacterCard();
+  await loadSessions();
+  await loadDatabaseInfo();
+  await loadMemories();
+  await loadKnowledge();
+  startNewSession();
+}
+
+elements.setupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (elements.setupPasswordInput.value !== elements.setupPasswordConfirmInput.value) {
+    showAuthError("两次输入的密码不一致");
+    return;
+  }
+  try {
+    const payload = await requestJson("/auth/setup", {
+      method: "POST",
+      body: JSON.stringify({
+        username: elements.setupUsernameInput.value.trim(),
+        password: elements.setupPasswordInput.value,
+      }),
+      skipAuthRedirect: true,
+    });
+    state.hasUser = true;
+    await afterAuth(payload);
+  } catch (error) {
+    showAuthError(error);
+  }
+});
+
+elements.loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const payload = await requestJson("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        username: elements.loginUsernameInput.value.trim(),
+        password: elements.loginPasswordInput.value,
+      }),
+      skipAuthRedirect: true,
+    });
+    await afterAuth(payload);
+  } catch (error) {
+    showAuthError(error);
+  }
+});
+
+elements.logoutButton.addEventListener("click", () => logout(true));
+elements.userAvatarInput.addEventListener("change", async () => {
+  const file = elements.userAvatarInput.files?.[0];
+  if (!file) {
+    return;
+  }
+  try {
+    await uploadUserAvatar(file);
+  } catch (error) {
+    window.alert(friendlyError(error));
+  } finally {
+    elements.userAvatarInput.value = "";
+  }
+});
+elements.characterAvatarInput.addEventListener("change", async () => {
+  const file = elements.characterAvatarInput.files?.[0];
+  if (!file) {
+    return;
+  }
+  try {
+    await uploadCharacterAvatar(file);
+  } catch (error) {
+    window.alert(friendlyError(error));
+  } finally {
+    elements.characterAvatarInput.value = "";
+  }
+});
 elements.chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = elements.messageInput.value.trim();
   if (!message) {
     return;
   }
-
   elements.messageInput.value = "";
+  const user = state.currentUser || {};
+  const character = state.currentCharacter || {};
   elements.messages.insertAdjacentHTML(
     "beforeend",
-    `<article class="message-pair pending"><div class="bubble user">${escapeHtml(message)}</div><div class="bubble assistant">...</div></article>`,
+    `<article class="message-pair pending">
+      <div class="message-row user">
+        ${avatarMarkup(user.avatar_url, user.username, firstText(user.username, "我"))}
+        <div class="bubble user">${escapeHtml(message)}</div>
+      </div>
+      <div class="message-row assistant">
+        ${avatarMarkup(character.avatar_url, character.display_name, firstText(character.display_name, "AI"))}
+        <div class="bubble assistant">...</div>
+      </div>
+    </article>`,
   );
   elements.messages.scrollTop = elements.messages.scrollHeight;
 
@@ -498,10 +729,7 @@ elements.chatForm.addEventListener("submit", async (event) => {
     await sendMessage(message);
   } catch (error) {
     setStatus("Error");
-    elements.messages.insertAdjacentHTML(
-      "beforeend",
-      `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`,
-    );
+    elements.messages.insertAdjacentHTML("beforeend", `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`);
   } finally {
     elements.sendButton.disabled = false;
     elements.messageInput.focus();
@@ -516,43 +744,37 @@ elements.settingsOverlay.addEventListener("click", (event) => {
     setSettingsOpen(false);
   }
 });
-elements.settingsDebugToggle.addEventListener("change", () => {
-  setDebugMode(elements.settingsDebugToggle.checked);
-});
+elements.settingsDebugToggle.addEventListener("change", () => setDebugMode(elements.settingsDebugToggle.checked));
 elements.voiceToggle.addEventListener("change", () => setVoiceEnabled(elements.voiceToggle.checked));
-elements.settingsVoiceToggle.addEventListener("change", () => {
-  setVoiceEnabled(elements.settingsVoiceToggle.checked);
-});
+elements.settingsVoiceToggle.addEventListener("change", () => setVoiceEnabled(elements.settingsVoiceToggle.checked));
 elements.settingsCharacterSelect.addEventListener("change", async () => {
   setCharacterId(elements.settingsCharacterSelect.value);
+  await loadCharacterCard();
   await loadMemories();
   await loadKnowledge();
+});
+elements.characterSelect.addEventListener("change", async () => {
+  setCharacterId(elements.characterSelect.value);
   await loadCharacterCard();
+  await loadMemories();
+  await loadKnowledge();
 });
 elements.refreshSessionsButton.addEventListener("click", async () => {
   await loadSessions();
   await loadDatabaseInfo();
 });
 elements.deleteSessionButton.addEventListener("click", async () => {
-  if (!state.currentSessionId) {
+  if (!state.currentSessionId || !window.confirm("删除当前会话记录？")) {
     return;
   }
-  const ok = window.confirm("删除当前会话记录？");
-  if (!ok) {
-    return;
-  }
-  await requestJson(`/debug/sessions/${encodeURIComponent(state.currentSessionId)}`, {
-    method: "DELETE",
-  });
+  await requestJson(`/debug/sessions/${encodeURIComponent(state.currentSessionId)}`, { method: "DELETE" });
   await loadSessions();
   await loadDatabaseInfo();
   startNewSession();
 });
 elements.clearCurrentSessionButton.addEventListener("click", async () => {
   if (state.currentSessionId) {
-    await requestJson(`/debug/sessions/${encodeURIComponent(state.currentSessionId)}`, {
-      method: "DELETE",
-    });
+    await requestJson(`/debug/sessions/${encodeURIComponent(state.currentSessionId)}`, { method: "DELETE" });
     await loadSessions();
     await loadDatabaseInfo();
   }
@@ -560,13 +782,10 @@ elements.clearCurrentSessionButton.addEventListener("click", async () => {
   setSettingsOpen(false);
 });
 elements.clearSessionsButton.addEventListener("click", async () => {
-  const ok = window.confirm("清空全部会话记录？");
-  if (!ok) {
+  if (!window.confirm("清空全部会话记录？")) {
     return;
   }
-  await requestJson("/debug/sessions", {
-    method: "DELETE",
-  });
+  await requestJson("/debug/sessions", { method: "DELETE" });
   await loadSessions();
   await loadDatabaseInfo();
   startNewSession();
@@ -574,22 +793,15 @@ elements.clearSessionsButton.addEventListener("click", async () => {
 elements.refreshMemoriesButton.addEventListener("click", loadMemories);
 elements.refreshKnowledgeButton.addEventListener("click", loadKnowledge);
 elements.importKnowledgeButton.addEventListener("click", async () => {
-  const characterId = getCharacterId();
-  await requestJson(`/knowledge/import-jsonl?character_id=${encodeURIComponent(characterId)}`, {
-    method: "POST",
-  });
+  await requestJson(`/knowledge/import-jsonl?character_id=${encodeURIComponent(getCharacterId())}`, { method: "POST" });
   await loadKnowledge();
   await loadDatabaseInfo();
 });
 elements.clearKnowledgeButton.addEventListener("click", async () => {
-  const ok = window.confirm("清空当前角色的数据库知识库？");
-  if (!ok) {
+  if (!window.confirm("清空当前角色的数据库知识库？")) {
     return;
   }
-  const characterId = getCharacterId();
-  await requestJson(`/knowledge?character_id=${encodeURIComponent(characterId)}`, {
-    method: "DELETE",
-  });
+  await requestJson(`/knowledge?character_id=${encodeURIComponent(getCharacterId())}`, { method: "DELETE" });
   await loadKnowledge();
   await loadDatabaseInfo();
 });
@@ -609,10 +821,7 @@ elements.memoryForm.addEventListener("submit", async (event) => {
   if (!content) {
     return;
   }
-  const tags = elements.memoryTagsInput.value
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
+  const tags = elements.memoryTagsInput.value.split(",").map((tag) => tag.trim()).filter(Boolean);
   await requestJson("/memory", {
     method: "POST",
     body: JSON.stringify({
@@ -633,9 +842,7 @@ elements.memoryList.addEventListener("click", async (event) => {
   if (!button) {
     return;
   }
-  await requestJson(`/memory/${encodeURIComponent(button.dataset.memoryId)}`, {
-    method: "DELETE",
-  });
+  await requestJson(`/memory/${encodeURIComponent(button.dataset.memoryId)}`, { method: "DELETE" });
   await loadMemories();
   await loadDatabaseInfo();
 });
@@ -645,10 +852,7 @@ elements.knowledgeForm.addEventListener("submit", async (event) => {
   if (!content) {
     return;
   }
-  const tags = elements.knowledgeTagsInput.value
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
+  const tags = elements.knowledgeTagsInput.value.split(",").map((tag) => tag.trim()).filter(Boolean);
   await requestJson("/knowledge", {
     method: "POST",
     body: JSON.stringify({
@@ -670,12 +874,11 @@ elements.knowledgeList.addEventListener("click", async (event) => {
   if (!button) {
     return;
   }
-  await requestJson(`/knowledge/${encodeURIComponent(button.dataset.knowledgeId)}`, {
-    method: "DELETE",
-  });
+  await requestJson(`/knowledge/${encodeURIComponent(button.dataset.knowledgeId)}`, { method: "DELETE" });
   await loadKnowledge();
   await loadDatabaseInfo();
 });
+
 async function saveSuggestion(index) {
   const suggestion = state.memorySuggestions[Number(index)];
   if (!suggestion) {
@@ -713,13 +916,11 @@ elements.memoryConfirmList.addEventListener("click", async (event) => {
     renderMemorySuggestions(state.memorySuggestions);
   }
 });
-
 elements.memorySuggestionList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-suggestion-index]");
-  if (!button) {
-    return;
+  if (button) {
+    await saveSuggestion(button.dataset.suggestionIndex);
   }
-  await saveSuggestion(button.dataset.suggestionIndex);
 });
 elements.feedbackForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -761,34 +962,30 @@ elements.voiceTestForm.addEventListener("submit", async (event) => {
     elements.voiceTestResult.innerHTML = `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`;
   }
 });
-elements.characterSelect.addEventListener("change", async () => {
-  setCharacterId(elements.characterSelect.value);
-  await loadMemories();
-  await loadKnowledge();
-  await loadCharacterCard();
-});
 elements.sessionList.addEventListener("click", async (event) => {
   const item = event.target.closest("[data-session-id]");
-  if (!item) {
-    return;
+  if (item) {
+    await loadSession(item.dataset.sessionId);
   }
-  await loadSession(item.dataset.sessionId);
 });
 
 async function boot() {
+  setAuthenticated(false);
   try {
-    setDebugMode(window.localStorage.getItem("roleChatbotDebugMode") === "1");
-    setVoiceEnabled(window.localStorage.getItem("roleChatbotVoice") === "1");
-    await loadCharacters();
-    await loadCharacterCard();
-    await loadSessions();
-    await loadDatabaseInfo();
-    await loadMemories();
-    await loadKnowledge();
-    startNewSession();
+    const status = await requestJson("/auth/status", { skipAuthRedirect: true });
+    state.hasUser = Boolean(status.has_user);
+    if (!state.hasUser) {
+      showAuthMode("setup");
+      return;
+    }
+    if (!state.token) {
+      showAuthMode("login");
+      return;
+    }
+    setAuthenticated(true);
+    await initializeApp();
   } catch (error) {
-    setStatus("Error");
-    elements.messages.innerHTML = `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`;
+    logout(false, friendlyError(error));
   }
 }
 

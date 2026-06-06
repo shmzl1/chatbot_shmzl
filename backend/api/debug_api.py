@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from core.schemas import (
@@ -8,7 +8,9 @@ from core.schemas import (
     DeleteResponse,
     TurnFeedbackRequest,
     TurnFeedbackResponse,
+    UserRecord,
 )
+from services.auth_service import get_current_user
 from services.database_service import database_service
 
 
@@ -26,12 +28,18 @@ def export_debug_data() -> JSONResponse:
 
 
 @router.get("/sessions", response_model=ChatSessionListResponse)
-def list_sessions(limit: int = Query(default=50, ge=1, le=200)) -> ChatSessionListResponse:
+def list_sessions(
+    limit: int = Query(default=50, ge=1, le=200),
+    current_user: UserRecord = Depends(get_current_user),
+) -> ChatSessionListResponse:
     return ChatSessionListResponse(sessions=database_service.list_sessions(limit=limit))
 
 
 @router.get("/sessions/{session_id}/turns", response_model=ChatTurnListResponse)
-def list_turns(session_id: str) -> ChatTurnListResponse:
+def list_turns(
+    session_id: str,
+    current_user: UserRecord = Depends(get_current_user),
+) -> ChatTurnListResponse:
     return ChatTurnListResponse(
         session_id=session_id,
         turns=database_service.list_turns(session_id),
@@ -39,19 +47,26 @@ def list_turns(session_id: str) -> ChatTurnListResponse:
 
 
 @router.delete("/sessions/{session_id}", response_model=DeleteResponse)
-def delete_session(session_id: str) -> DeleteResponse:
+def delete_session(
+    session_id: str,
+    current_user: UserRecord = Depends(get_current_user),
+) -> DeleteResponse:
     deleted = database_service.delete_session(session_id)
     return DeleteResponse(status="ok", deleted=deleted)
 
 
 @router.delete("/sessions", response_model=DeleteResponse)
-def clear_sessions() -> DeleteResponse:
+def clear_sessions(current_user: UserRecord = Depends(get_current_user)) -> DeleteResponse:
     deleted = database_service.clear_sessions()
     return DeleteResponse(status="ok", deleted=deleted)
 
 
 @router.post("/turns/{turn_id}/feedback", response_model=TurnFeedbackResponse)
-def save_feedback(turn_id: int, request: TurnFeedbackRequest) -> TurnFeedbackResponse:
+def save_feedback(
+    turn_id: int,
+    request: TurnFeedbackRequest,
+    current_user: UserRecord = Depends(get_current_user),
+) -> TurnFeedbackResponse:
     return TurnFeedbackResponse(
         **database_service.save_feedback(
             turn_id=turn_id,

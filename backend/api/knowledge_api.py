@@ -1,13 +1,14 @@
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from core.config import settings
 from core.schemas import DeleteResponse, KnowledgeCreateRequest, KnowledgeListResponse, KnowledgeRecord
+from services.auth_service import get_current_user
 from services.database_service import database_service
 
 
-router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+router = APIRouter(prefix="/knowledge", tags=["knowledge"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=KnowledgeListResponse)

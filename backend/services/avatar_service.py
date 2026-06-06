@@ -38,7 +38,18 @@ class AvatarService:
         target_dir = settings.upload_dir / relative_dir
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / filename
-        target_path.write_bytes(data)
+        try:
+            target_path.write_bytes(data)
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to save avatar file to {target_path}: {exc}",
+            ) from exc
+        if not target_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Avatar file was not created: {target_path}",
+            )
         public_path = (relative_dir / filename).as_posix()
         return f"/uploads/{public_path}"
 

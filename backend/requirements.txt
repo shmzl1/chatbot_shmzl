@@ -10,3 +10,4 @@ psycopg[binary]
 passlib[bcrypt]
 python-jose[cryptography]
 python-multipart
+argon2-cffi

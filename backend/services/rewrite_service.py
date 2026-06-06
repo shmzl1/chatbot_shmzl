@@ -1,8 +1,9 @@
 import re
 from typing import Dict, List
 
+from fastapi import HTTPException
+
 from core.schemas import CharacterCard
-from services.character_service import character_service
 
 
 class RewriteService:
@@ -22,7 +23,10 @@ class RewriteService:
         rewritten = self._shorten(rewritten)
 
         if self._still_weak(rewritten):
-            rewritten = character_service.build_mock_reply(character, user_message)
+            raise HTTPException(
+                status_code=502,
+                detail="LLM reply failed style validation and cannot be rewritten locally without mock fallback.",
+            )
 
         return rewritten, rewritten != reply
 
@@ -56,7 +60,7 @@ class RewriteService:
 
         shortened = "".join(parts[:3]).strip()
         if len(shortened) > 90:
-            shortened = shortened[:88].rstrip("，,；;、 ") + "。"
+            shortened = shortened[:88].rstrip("，,。.") + "。"
         return shortened
 
     def _still_weak(self, reply: str) -> bool:

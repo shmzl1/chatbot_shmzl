@@ -77,7 +77,7 @@ if (-not $Conda) {
 
 Write-Host "Conda: $Conda"
 
-& $Conda run -n $CondaEnvName python -c "import fastapi, uvicorn, openai, dotenv, psycopg" 2>$null
+& $Conda run -n $CondaEnvName python -c "import fastapi, uvicorn, openai, dotenv, psycopg, jose, passlib, multipart, argon2" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "conda 环境 $CondaEnvName 不存在，或依赖还没装好。" -ForegroundColor Yellow
     Write-Host "请先手动运行：" -ForegroundColor Yellow

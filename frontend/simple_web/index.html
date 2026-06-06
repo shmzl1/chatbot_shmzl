@@ -6,8 +6,43 @@
     <title>Role Chatbot</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
-  <body class="user-mode">
-    <div class="app-shell">
+  <body class="user-mode unauthenticated">
+    <section id="authScreen" class="auth-screen">
+      <div class="auth-card">
+        <p class="eyebrow">Local Role</p>
+        <h1 id="authTitle">本地登录锁</h1>
+        <p id="authSubtitle" class="auth-subtitle">请输入本地账号密码后进入聊天。</p>
+        <form id="setupForm" class="auth-form hidden">
+          <label>
+            <span>用户名</span>
+            <input id="setupUsernameInput" type="text" autocomplete="username" minlength="3" required />
+          </label>
+          <label>
+            <span>密码</span>
+            <input id="setupPasswordInput" type="password" autocomplete="new-password" minlength="6" required />
+          </label>
+          <label>
+            <span>确认密码</span>
+            <input id="setupPasswordConfirmInput" type="password" autocomplete="new-password" minlength="6" required />
+          </label>
+          <button type="submit">创建本地账号</button>
+        </form>
+        <form id="loginForm" class="auth-form hidden">
+          <label>
+            <span>用户名</span>
+            <input id="loginUsernameInput" type="text" autocomplete="username" required />
+          </label>
+          <label>
+            <span>密码</span>
+            <input id="loginPasswordInput" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">登录</button>
+        </form>
+        <div id="authError" class="error-box hidden"></div>
+      </div>
+    </section>
+
+    <div id="appShell" class="app-shell">
       <aside class="sessions-pane">
         <div class="pane-header">
           <div>
@@ -16,10 +51,31 @@
           </div>
           <button id="newSessionButton" class="icon-button" type="button" title="新会话">+</button>
         </div>
-        <div class="dev-only">
-          <label class="field-label" for="characterSelect">角色</label>
-          <select id="characterSelect" class="select"></select>
-        </div>
+
+        <section class="user-panel">
+          <div id="currentUserAvatar" class="avatar-host"></div>
+          <div class="user-panel-main">
+            <strong id="currentUsername">未登录</strong>
+            <label class="upload-link">
+              上传我的头像
+              <input id="userAvatarInput" type="file" accept="image/png,image/jpeg,image/webp" />
+            </label>
+          </div>
+          <button id="logoutButton" class="text-button danger" type="button">退出</button>
+        </section>
+
+        <section class="character-panel">
+          <div id="currentCharacterAvatar" class="avatar-host"></div>
+          <div class="character-panel-main">
+            <label class="field-label" for="characterSelect">角色</label>
+            <select id="characterSelect" class="select"></select>
+            <label class="upload-link">
+              上传角色头像
+              <input id="characterAvatarInput" type="file" accept="image/png,image/jpeg,image/webp" />
+            </label>
+          </div>
+        </section>
+
         <div class="session-list-header">
           <span>会话</span>
           <div class="header-actions">
@@ -90,7 +146,7 @@
               <input id="feedbackScoreInput" type="number" min="1" max="10" value="8" />
               <button type="submit">保存评分</button>
             </div>
-            <textarea id="feedbackNoteInput" rows="2" placeholder="这轮效果哪里好或不好..."></textarea>
+            <textarea id="feedbackNoteInput" rows="2" placeholder="这一轮哪里好或不好..."></textarea>
           </form>
         </section>
         <section class="debug-section">

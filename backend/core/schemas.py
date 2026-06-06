@@ -184,15 +184,18 @@ class TurnFeedbackResponse(BaseModel):
     created_at: str
 
 
-class UserRegisterRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
-    email: Optional[str] = Field(default=None, max_length=254)
-    password: str = Field(..., min_length=6, max_length=128)
-
-
 class UserLoginRequest(BaseModel):
-    username_or_email: str = Field(..., min_length=1, max_length=254)
-    password: str = Field(..., min_length=1, max_length=128)
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str
+
+
+class UserSetupRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str
+
+
+class AuthStatusResponse(BaseModel):
+    has_user: bool
 
 
 class UserRecord(BaseModel):

@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from core.schemas import (
+    AuthStatusResponse,
     AuthTokenResponse,
     AvatarUploadResponse,
     UserLoginRequest,
     UserPublic,
     UserRecord,
-    UserRegisterRequest,
+    UserSetupRequest,
 )
 from services.auth_service import auth_service, get_current_user, public_user
 from services.avatar_service import avatar_service
@@ -16,13 +17,15 @@ from services.database_service import database_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=AuthTokenResponse)
-def register(request: UserRegisterRequest) -> AuthTokenResponse:
-    user = auth_service.register(request)
-    token, logged_in_user = auth_service.login(
-        UserLoginRequest(username_or_email=user.username, password=request.password)
-    )
-    return AuthTokenResponse(access_token=token, user=public_user(logged_in_user))
+@router.get("/status", response_model=AuthStatusResponse)
+def status() -> AuthStatusResponse:
+    return AuthStatusResponse(has_user=auth_service.has_user())
+
+
+@router.post("/setup", response_model=AuthTokenResponse)
+def setup(request: UserSetupRequest) -> AuthTokenResponse:
+    token, user = auth_service.setup(request)
+    return AuthTokenResponse(access_token=token, user=public_user(user))
 
 
 @router.post("/login", response_model=AuthTokenResponse)
@@ -43,8 +46,8 @@ async def upload_my_avatar(
 ) -> AvatarUploadResponse:
     avatar_url = await avatar_service.save_avatar(
         file=file,
-        owner_id=str(current_user.id),
-        category="users",
+        owner_id="user_avatar",
+        category="user",
     )
     database_service.update_user_avatar(current_user.id, avatar_url)
     return AvatarUploadResponse(avatar_url=avatar_url)

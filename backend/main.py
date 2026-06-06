@@ -11,6 +11,7 @@ from api.knowledge_api import router as knowledge_router
 from api.memory_api import router as memory_router
 from api.voice_api import router as voice_router
 from core.config import settings
+from services.database_service import database_service
 
 
 app = FastAPI(
@@ -26,6 +27,11 @@ app.include_router(debug_router)
 app.include_router(knowledge_router)
 app.include_router(memory_router)
 app.include_router(voice_router)
+
+
+@app.on_event("startup")
+def run_database_migrations() -> None:
+    database_service.ensure_ready()
 
 
 @app.get("/", include_in_schema=False)

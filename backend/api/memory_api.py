@@ -1,12 +1,13 @@
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from core.schemas import DeleteResponse, MemoryCreateRequest, MemoryListResponse, MemoryRecord
+from services.auth_service import get_current_user
 from services.database_service import database_service
 
 
-router = APIRouter(prefix="/memory", tags=["memory"])
+router = APIRouter(prefix="/memory", tags=["memory"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=MemoryListResponse)

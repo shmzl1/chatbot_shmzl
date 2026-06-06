@@ -16,7 +16,10 @@ class CharacterService:
 
     def list_characters(self) -> List[CharacterSummary]:
         if not self.characters_dir.exists():
-            return []
+            raise HTTPException(
+                status_code=500,
+                detail=f"Characters directory does not exist: {self.characters_dir}",
+            )
 
         characters: List[CharacterSummary] = []
         for file_path in sorted(self.characters_dir.glob("*.json")):
@@ -29,6 +32,12 @@ class CharacterService:
                 )
             )
 
+        if not characters:
+            raise HTTPException(
+                status_code=500,
+                detail=f"No character JSON files found in {self.characters_dir}",
+            )
+
         return characters
 
     def get_character(self, character_id: str) -> CharacterCard:
@@ -36,7 +45,7 @@ class CharacterService:
         if not file_path.exists():
             raise HTTPException(
                 status_code=404,
-                detail=f"Character '{character_id}' not found.",
+                detail=f"Character '{character_id}' not found: {file_path}",
             )
 
         return self._load_card(file_path)
@@ -51,23 +60,6 @@ class CharacterService:
         )
         return character
 
-    def build_mock_reply(self, character: CharacterCard, message: str) -> str:
-        normalized = message.strip()
-        if not normalized:
-            raise HTTPException(status_code=400, detail="Message cannot be empty.")
-
-        if any(word in normalized for word in ("累", "难受", "没用", "失败", "考砸")):
-            return "别急着给自己下结论。先把眼前这一件事处理掉，我在这儿。"
-
-        if any(word in normalized for word in ("不想", "放弃", "懒", "学不动")):
-            return "又想躲开了？行，先做五分钟。五分钟后再说停不停。"
-
-        if any(word in normalized for word in ("谢谢", "夸", "喜欢", "陪")):
-            return "少来这套。你真要谢，就好好把自己照顾明白。"
-
-        style_hint = character.speaking_style[0] if character.speaking_style else "短句"
-        return f"听见了。按{style_hint}来讲，先别乱想，把话说清楚一点。"
-
     def _load_card(self, file_path: Path) -> CharacterCard:
         try:
             with file_path.open("r", encoding="utf-8") as file:
@@ -76,12 +68,12 @@ class CharacterService:
         except json.JSONDecodeError as exc:
             raise HTTPException(
                 status_code=500,
-                detail=f"Character file '{file_path.name}' is not valid JSON.",
+                detail=f"Character file '{file_path}' is not valid JSON: {exc}",
             ) from exc
         except ValidationError as exc:
             raise HTTPException(
                 status_code=500,
-                detail=f"Character file '{file_path.name}' schema is invalid.",
+                detail=f"Character file '{file_path}' schema is invalid: {exc}",
             ) from exc
 
     def _character_path(self, character_id: str) -> Path:

@@ -14,6 +14,7 @@ from psycopg.types.json import Json
 from core.config import settings
 from core.schemas import CandidateReply, ChatSessionSummary, ChatTurnRecord, MemoryRecord, UserRecord
 from core.schemas import KnowledgeRecord
+from services.migration_service import migration_service
 
 
 def _now() -> str:
@@ -221,8 +222,13 @@ class DatabaseService:
             with self._connect() as connection:
                 connection.execute("SELECT 1").fetchone()
             return True
-        except Exception:
+        except psycopg.OperationalError:
             return False
+
+    def ensure_ready(self) -> None:
+        self._ensure_database()
+        with self._connect() as connection:
+            connection.execute("SELECT 1").fetchone()
 
     def create_user(
         self,
@@ -236,6 +242,8 @@ class DatabaseService:
         normalized_email = email.strip().lower() if email else None
         now = _now()
 
+        if self.user_count() > 0:
+            raise HTTPException(status_code=409, detail="本地账号已初始化")
         if self.get_user_by_username(normalized_username):
             raise HTTPException(status_code=409, detail="用户名已存在")
         if normalized_email and self.get_user_by_email(normalized_email):
@@ -259,6 +267,12 @@ class DatabaseService:
             ).fetchone()
         return self._row_to_user(row)
 
+    def user_count(self) -> int:
+        self._ensure_database()
+        with self._connect() as connection:
+            row = connection.execute("SELECT COUNT(*) AS count FROM users").fetchone()
+        return int(row["count"]) if row else 0
+
     def get_user_by_username(self, username: str) -> Optional[UserRecord]:
         self._ensure_database()
         with self._connect() as connection:
@@ -276,12 +290,6 @@ class DatabaseService:
                 (email.strip(),),
             ).fetchone()
         return self._row_to_user(row) if row else None
-
-    def get_user_by_login(self, username_or_email: str) -> Optional[UserRecord]:
-        value = username_or_email.strip()
-        if "@" in value:
-            return self.get_user_by_email(value)
-        return self.get_user_by_username(value)
 
     def get_user_by_id(self, user_id: int) -> Optional[UserRecord]:
         self._ensure_database()
@@ -308,6 +316,49 @@ class DatabaseService:
         if not row:
             raise HTTPException(status_code=404, detail="用户不存在")
         return self._row_to_user(row)
+
+    def upsert_character_avatar(self, character_id: str, avatar_url: str) -> str:
+        self._ensure_database()
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO character_avatar_map (
+                    character_id,
+                    avatar_url,
+                    created_at,
+                    updated_at
+                )
+                VALUES (%s, %s, NOW(), NOW())
+                ON CONFLICT (character_id) DO UPDATE SET
+                    avatar_url = EXCLUDED.avatar_url,
+                    updated_at = NOW()
+                RETURNING avatar_url
+                """,
+                (character_id, avatar_url),
+            ).fetchone()
+        return str(row["avatar_url"])
+
+    def get_character_avatar_map(self) -> Dict[str, str]:
+        self._ensure_database()
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT character_id, avatar_url FROM character_avatar_map"
+            ).fetchall()
+        return {str(row["character_id"]): str(row["avatar_url"]) for row in rows}
+
+    def get_character_avatar(self, character_id: str) -> Optional[str]:
+        self._ensure_database()
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT avatar_url
+                FROM character_avatar_map
+                WHERE character_id = %s
+                LIMIT 1
+                """,
+                (character_id,),
+            ).fetchone()
+        return str(row["avatar_url"]) if row else None
 
     def delete_session(self, session_id: str) -> int:
         self._ensure_database()
@@ -688,12 +739,17 @@ class DatabaseService:
         skipped = 0
         for source_type, path in jobs:
             if not path.exists():
-                continue
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Knowledge JSONL file is missing: {path}",
+                )
             for item in self._read_jsonl(path):
                 title, content, tags = self._knowledge_payload(source_type, item)
                 if not content:
-                    skipped += 1
-                    continue
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Knowledge JSONL item in {path} has empty content.",
+                    )
                 if self._knowledge_exists(character_id, source_type, title, content):
                     skipped += 1
                     continue
@@ -718,135 +774,34 @@ class DatabaseService:
         except psycopg.OperationalError as exc:
             raise HTTPException(
                 status_code=503,
-                detail=f"PostgreSQL is not ready: {exc}",
+                detail=f"Database connection failed before migration: {exc}",
             ) from exc
         self._initialized = True
 
     def _init_database(self) -> None:
-        with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    id BIGSERIAL PRIMARY KEY,
-                    username TEXT NOT NULL,
-                    email TEXT,
-                    password_hash TEXT NOT NULL,
-                    avatar_url TEXT,
-                    created_at TIMESTAMPTZ NOT NULL,
-                    updated_at TIMESTAMPTZ NOT NULL
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower
-                ON users (LOWER(username))
-                """
-            )
-            connection.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
-                ON users (LOWER(email))
-                WHERE email IS NOT NULL AND email <> ''
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS chat_sessions (
-                    id TEXT PRIMARY KEY,
-                    character_id TEXT NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL,
-                    updated_at TIMESTAMPTZ NOT NULL
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS chat_turns (
-                    id BIGSERIAL PRIMARY KEY,
-                    session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
-                    character_id TEXT NOT NULL,
-                    user_message TEXT NOT NULL,
-                    reply TEXT NOT NULL,
-                    emotion TEXT NOT NULL,
-                    candidates_json JSONB NOT NULL,
-                    debug_json JSONB NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_chat_turns_session_id
-                ON chat_turns(session_id, id)
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS long_term_memories (
-                    id BIGSERIAL PRIMARY KEY,
-                    character_id TEXT NOT NULL,
-                    memory_type TEXT NOT NULL DEFAULT 'note',
-                    content TEXT NOT NULL,
-                    importance INTEGER NOT NULL DEFAULT 5,
-                    tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-                    created_at TIMESTAMPTZ NOT NULL,
-                    updated_at TIMESTAMPTZ NOT NULL,
-                    last_used_at TIMESTAMPTZ
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS turn_feedback (
-                    id BIGSERIAL PRIMARY KEY,
-                    turn_id BIGINT NOT NULL REFERENCES chat_turns(id) ON DELETE CASCADE,
-                    score INTEGER NOT NULL,
-                    note TEXT NOT NULL DEFAULT '',
-                    created_at TIMESTAMPTZ NOT NULL
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_turn_feedback_turn_id
-                ON turn_feedback(turn_id, created_at DESC)
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS knowledge_items (
-                    id BIGSERIAL PRIMARY KEY,
-                    character_id TEXT NOT NULL,
-                    source_type TEXT NOT NULL,
-                    title TEXT NOT NULL DEFAULT '',
-                    content TEXT NOT NULL,
-                    tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-                    created_at TIMESTAMPTZ NOT NULL,
-                    updated_at TIMESTAMPTZ NOT NULL
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_knowledge_items_character_type
-                ON knowledge_items(character_id, source_type, updated_at DESC)
-                """
-            )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_long_term_memories_character
-                ON long_term_memories(character_id, importance DESC, updated_at DESC)
-                """
-            )
+        migration_service.run_migrations(self._connect)
 
     def _row_to_turn(self, row: Dict[str, Any]) -> ChatTurnRecord:
-        candidates = [
-            CandidateReply(**candidate)
-            for candidate in self._ensure_json(row["candidates_json"], [])
-            if isinstance(candidate, dict)
-        ]
-        debug = self._ensure_json(row["debug_json"], {})
+        candidates_json = self._ensure_json(row["candidates_json"], "chat_turns.candidates_json")
+        if not isinstance(candidates_json, list):
+            raise HTTPException(
+                status_code=500,
+                detail=f"chat_turns.candidates_json for turn {row['id']} must be a list.",
+            )
+        candidates = []
+        for candidate in candidates_json:
+            if not isinstance(candidate, dict):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"chat_turns.candidates_json for turn {row['id']} contains a non-object item.",
+                )
+            candidates.append(CandidateReply(**candidate))
+        debug = self._ensure_json(row["debug_json"], "chat_turns.debug_json")
+        if not isinstance(debug, dict):
+            raise HTTPException(
+                status_code=500,
+                detail=f"chat_turns.debug_json for turn {row['id']} must be an object.",
+            )
         return ChatTurnRecord(
             id=row["id"],
             session_id=row["session_id"],
@@ -855,33 +810,43 @@ class DatabaseService:
             reply=row["reply"],
             emotion=row["emotion"],
             candidates=candidates,
-            debug=debug if isinstance(debug, dict) else {},
+            debug=debug,
             created_at=self._as_text(row["created_at"]),
         )
 
     def _row_to_memory(self, row: Dict[str, Any]) -> MemoryRecord:
-        tags = self._ensure_json(row["tags_json"], [])
+        tags = self._ensure_json(row["tags_json"], "long_term_memories.tags_json")
+        if not isinstance(tags, list):
+            raise HTTPException(
+                status_code=500,
+                detail=f"long_term_memories.tags_json for memory {row['id']} must be a list.",
+            )
         return MemoryRecord(
             id=row["id"],
             character_id=row["character_id"],
             memory_type=row["memory_type"],
             content=row["content"],
             importance=row["importance"],
-            tags=tags if isinstance(tags, list) else [],
+            tags=tags,
             created_at=self._as_text(row["created_at"]),
             updated_at=self._as_text(row["updated_at"]),
             last_used_at=self._as_text(row["last_used_at"]) if row["last_used_at"] else None,
         )
 
     def _row_to_knowledge(self, row: Dict[str, Any]) -> KnowledgeRecord:
-        tags = self._ensure_json(row["tags_json"], [])
+        tags = self._ensure_json(row["tags_json"], "knowledge_items.tags_json")
+        if not isinstance(tags, list):
+            raise HTTPException(
+                status_code=500,
+                detail=f"knowledge_items.tags_json for item {row['id']} must be a list.",
+            )
         return KnowledgeRecord(
             id=row["id"],
             character_id=row["character_id"],
             source_type=row["source_type"],
             title=row["title"],
             content=row["content"],
-            tags=tags if isinstance(tags, list) else [],
+            tags=tags,
             created_at=self._as_text(row["created_at"]),
             updated_at=self._as_text(row["updated_at"]),
         )
@@ -928,10 +893,17 @@ class DatabaseService:
                     continue
                 try:
                     value = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(value, dict):
-                    items.append(value)
+                except json.JSONDecodeError as exc:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Invalid JSONL in {path} at line {line_no}: {exc}",
+                    ) from exc
+                if not isinstance(value, dict):
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"JSONL item in {path} at line {line_no} must be an object.",
+                    )
+                items.append(value)
         return items
 
     def _knowledge_payload(
@@ -967,13 +939,21 @@ class DatabaseService:
         ]
         return title, "；".join(str(part) for part in parts if part), [str(tag) for tag in tags]
 
-    def _ensure_json(self, value: Any, fallback: Any) -> Any:
+    def _ensure_json(self, value: Any, field_name: str) -> Any:
         if isinstance(value, str):
             try:
                 return json.loads(value)
-            except json.JSONDecodeError:
-                return fallback
-        return value if value is not None else fallback
+            except json.JSONDecodeError as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Invalid JSON stored in {field_name}: {exc}",
+                ) from exc
+        if value is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Required JSON value is NULL: {field_name}",
+            )
+        return value
 
     def _plain_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         result: Dict[str, Any] = {}

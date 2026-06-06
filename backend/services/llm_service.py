@@ -7,7 +7,6 @@ from fastapi import HTTPException
 
 from core.config import settings
 from core.schemas import CandidateReply, CharacterCard
-from services.character_service import character_service
 
 
 ALLOWED_EMOTIONS = {"neutral", "soft", "angry", "tired", "teasing", "serious"}
@@ -28,36 +27,34 @@ class LLMService:
         character: CharacterCard,
         user_message: str,
     ) -> LLMGeneration:
-        if self._should_use_openai():
-            return self._generate_with_openai(prompt)
+        self._validate_llm_settings()
+        return self._generate_with_openai(prompt)
 
-        return self._generate_with_mock(character, user_message)
-
-    def _should_use_openai(self) -> bool:
+    def _validate_llm_settings(self) -> None:
         provider = settings.llm_provider.lower()
         if provider == "mock":
-            return False
+            raise HTTPException(
+                status_code=500,
+                detail="LLM_PROVIDER=mock is disabled. Configure a real OpenAI-compatible API.",
+            )
+        if provider not in {"auto", "openai", "openai_compatible", "ark"}:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Unsupported LLM_PROVIDER '{settings.llm_provider}'.",
+            )
 
-        if provider in {"openai", "openai_compatible", "ark"}:
-            if not settings.openai_api_key:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"LLM_PROVIDER={settings.llm_provider} but OPENAI_API_KEY is empty.",
-                )
-            if not settings.openai_model:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"LLM_PROVIDER={settings.llm_provider} but OPENAI_MODEL is empty.",
-                )
-            return True
-
-        if provider == "auto":
-            return bool(settings.openai_api_key and settings.openai_model)
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unsupported LLM_PROVIDER '{settings.llm_provider}'.",
-        )
+        missing = []
+        if not settings.openai_api_key:
+            missing.append("OPENAI_API_KEY")
+        if not settings.openai_model:
+            missing.append("OPENAI_MODEL")
+        if provider in {"auto", "openai_compatible", "ark"} and not settings.openai_base_url:
+            missing.append("OPENAI_BASE_URL")
+        if missing:
+            raise HTTPException(
+                status_code=500,
+                detail=f"LLM configuration is incomplete: {', '.join(missing)} is required.",
+            )
 
     def _generate_with_openai(self, prompt: str) -> LLMGeneration:
         try:
@@ -99,35 +96,10 @@ class LLMService:
         candidates = self._parse_candidates(raw_text)
         return LLMGeneration(
             candidates=candidates,
-            provider="openai",
+            provider=provider_label(),
             model=settings.openai_model,
             raw_text=raw_text,
         )
-
-    def _generate_with_mock(
-        self,
-        character: CharacterCard,
-        user_message: str,
-    ) -> LLMGeneration:
-        first_reply = character_service.build_mock_reply(character, user_message)
-        candidates = [
-            CandidateReply(
-                reply=first_reply,
-                emotion=character.voice.default_emotion,
-                reason="本地 mock：根据关键词和角色卡生成。",
-            ),
-            CandidateReply(
-                reply="别把事情憋成一团。挑最麻烦的那块说，我听着。",
-                emotion="soft",
-                reason="短句、嘴硬，但保留陪伴感。",
-            ),
-            CandidateReply(
-                reply="行了，先停一下。你现在需要的是办法，不是继续吓自己。",
-                emotion="serious",
-                reason="更直接，适合用户情绪较重的场景。",
-            ),
-        ]
-        return LLMGeneration(candidates=candidates, provider="mock", model=None)
 
     def _parse_candidates(self, raw_text: str) -> List[CandidateReply]:
         data = self._load_json(raw_text)
@@ -141,15 +113,24 @@ class LLMService:
         candidates: List[CandidateReply] = []
         for item in raw_candidates[:3]:
             if not isinstance(item, dict):
-                continue
+                raise HTTPException(
+                    status_code=502,
+                    detail="LLM candidate item must be an object.",
+                )
 
             reply = str(item.get("reply", "")).strip()
             if not reply:
-                continue
+                raise HTTPException(
+                    status_code=502,
+                    detail="LLM candidate reply is empty.",
+                )
 
             emotion = str(item.get("emotion", "neutral")).strip()
             if emotion not in ALLOWED_EMOTIONS:
-                emotion = "neutral"
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"LLM candidate emotion '{emotion}' is not allowed.",
+                )
 
             candidates.append(
                 CandidateReply(
@@ -157,12 +138,6 @@ class LLMService:
                     emotion=emotion,
                     reason=str(item.get("reason", "")).strip(),
                 )
-            )
-
-        if not candidates:
-            raise HTTPException(
-                status_code=502,
-                detail="LLM response did not provide any usable candidate replies.",
             )
 
         return candidates
@@ -180,7 +155,7 @@ class LLMService:
         except json.JSONDecodeError as exc:
             raise HTTPException(
                 status_code=502,
-                detail="LLM response is not valid JSON.",
+                detail=f"LLM response is not valid JSON: {exc}",
             ) from exc
 
         if not isinstance(data, dict):
@@ -200,6 +175,11 @@ class LLMService:
         if start >= 0 and end > start:
             return text[start : end + 1]
         return text
+
+
+def provider_label() -> str:
+    provider = settings.llm_provider.lower()
+    return "openai_compatible" if provider == "auto" else provider
 
 
 llm_service = LLMService()

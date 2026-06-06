@@ -1,6 +1,7 @@
 # Environment and local secrets
 .env
 .env.*
+backend/.env
 !.env.example
 !backend/.env.example
 
@@ -52,8 +53,18 @@ qdrant_storage/
 tmp/
 temp/
 .cache/
-uploads/
-backend/uploads/
+/uploads/
+/backend/uploads/
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
+!backend/data/uploads/avatars/
+backend/data/uploads/avatars/*
+!backend/data/uploads/avatars/user/
+!backend/data/uploads/avatars/characters/
+backend/data/uploads/avatars/user/*
+backend/data/uploads/avatars/characters/*
+!backend/data/uploads/avatars/user/.gitkeep
+!backend/data/uploads/avatars/characters/.gitkeep
 image/
 
 # Local voice/raw assets that may contain private user data
