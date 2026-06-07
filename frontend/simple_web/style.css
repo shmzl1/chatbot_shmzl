@@ -483,6 +483,58 @@ body.user-mode .bubble {
   font-weight: 700;
 }
 
+.persona-feedback {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.persona-feedback-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.persona-feedback-chips button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.persona-feedback-chips button.good {
+  border-color: rgba(35, 107, 91, 0.35);
+  color: var(--brand);
+}
+
+.persona-feedback-chips button.bad {
+  border-color: rgba(163, 59, 59, 0.35);
+  color: var(--danger);
+}
+
+.persona-feedback textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  resize: vertical;
+  font-size: 12px;
+}
+
+.persona-feedback-status {
+  min-height: 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .audio-player {
   display: block;
   width: min(420px, 100%);
@@ -633,6 +685,16 @@ body.user-mode .composer {
   color: var(--ink);
 }
 
+.wide-button.danger {
+  background: rgba(163, 59, 59, 0.1);
+  color: var(--danger);
+}
+
+.wide-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .settings-note {
   margin: 8px 0 0;
   color: var(--muted);
@@ -741,6 +803,40 @@ body.user-mode .composer {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-2);
+}
+
+.persona-feedback-stats {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.persona-review-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.persona-review-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.persona-review-preview pre {
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #17211b;
+  color: #d8f3e4;
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .database-row {

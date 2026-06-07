@@ -23,19 +23,64 @@ class CharacterListResponse(BaseModel):
 class VoiceConfig(BaseModel):
     default_emotion: str = "neutral"
     language: str = "zh"
+    text_lang: str = "zh"
+    prompt_lang: str = "zh"
     speed_factor: float = 1.0
+    gptsovits_base_url: Optional[str] = None
+    ref_audio_path: Optional[str] = None
+    prompt_text: str = ""
+
+
+class StyleContract(BaseModel):
+    must: List[str] = Field(default_factory=list)
+    should: List[str] = Field(default_factory=list)
+    avoid: List[str] = Field(default_factory=list)
+    hard_bans: List[str] = Field(default_factory=list)
 
 
 class CharacterCard(BaseModel):
     id: str
     display_name: str
     avatar_url: Optional[str] = None
-    core_personality: List[str] = Field(default_factory=list)
-    speaking_style: List[str] = Field(default_factory=list)
+    core_personality: List[str]
+    speaking_style: List[str]
     relationship_to_user: str = ""
     forbidden: List[str] = Field(default_factory=list)
     reply_patterns: Dict[str, str] = Field(default_factory=dict)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
+    lore: List[Dict[str, Any]]
+    dialogues: List[Dict[str, Any]]
+    reactions: List[Dict[str, Any]]
+    style_contract: StyleContract = Field(default_factory=StyleContract)
+    evaluation_criteria: List[str] = Field(default_factory=list)
+    bad_examples: List[Dict[str, Any]] = Field(default_factory=list)
+    revision_notes: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class PersonaTurnFeedbackRequest(BaseModel):
+    character_id: str
+    session_id: Optional[str] = None
+    turn_id: Optional[int] = None
+    user_message: str = Field(..., min_length=1, max_length=4000)
+    assistant_message: str = Field(..., min_length=1, max_length=4000)
+    rating: str = Field(..., pattern="^(good|bad|neutral)$")
+    issue_tags: List[str] = Field(default_factory=list)
+    comment: str = Field(default="", max_length=2000)
+
+
+class PersonaReviewSummarizeRequest(BaseModel):
+    limit: int = Field(default=20, ge=1, le=100)
+
+
+class PersonaReviewApplyRequest(BaseModel):
+    preview_character_json: Dict[str, Any]
+    review_summary: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PersonaReviewRollbackResponse(BaseModel):
+    status: str
+    character: CharacterSummary
+    restored_from: str
 
 
 class ChatTextRequest(BaseModel):
@@ -122,6 +167,7 @@ class DatabaseInfoResponse(BaseModel):
     memory_count: int = 0
     knowledge_count: int = 0
     feedback_count: int = 0
+    persona_feedback_count: int = 0
 
 
 class MemoryCreateRequest(BaseModel):

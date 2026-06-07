@@ -16,18 +16,19 @@ class TTSService:
         text: str,
         emotion: str,
     ) -> tuple[str, str]:
-        ref_audio_path, prompt_text = self._select_reference(character.id, emotion)
+        ref_audio_path, prompt_text = self._select_reference(character, emotion)
         output_dir = settings.outputs_dir / "audio"
         output_dir.mkdir(parents=True, exist_ok=True)
         filename = self._filename(character.id, emotion)
         output_path = output_dir / filename
 
+        base_url = (character.voice.gptsovits_base_url or settings.gptsovits_base_url).rstrip("/")
         payload = {
             "text": text,
-            "text_lang": character.voice.language,
+            "text_lang": character.voice.text_lang or character.voice.language,
             "ref_audio_path": str(ref_audio_path),
             "prompt_text": prompt_text,
-            "prompt_lang": character.voice.language,
+            "prompt_lang": character.voice.prompt_lang or character.voice.language,
             "text_split_method": "cut5",
             "batch_size": 1,
             "media_type": "wav",
@@ -40,7 +41,7 @@ class TTSService:
 
         try:
             response = requests.post(
-                f"{settings.gptsovits_base_url}/tts",
+                f"{base_url}/tts",
                 json=payload,
                 timeout=settings.gptsovits_timeout_seconds,
             )
@@ -71,9 +72,19 @@ class TTSService:
         relative_path = f"outputs/audio/{filename}"
         return relative_path, f"/outputs/audio/{filename}"
 
-    def _select_reference(self, character_id: str, emotion: str) -> tuple[Path, str]:
-        emotion_dir = settings.data_dir / "voice_refs" / character_id / emotion
-        fallback_dir = settings.data_dir / "voice_refs" / character_id / "neutral"
+    def _select_reference(self, character: CharacterCard, emotion: str) -> tuple[Path, str]:
+        if character.voice.ref_audio_path:
+            ref_audio_path = self._resolve_reference_path(character.voice.ref_audio_path, character.id)
+            if not ref_audio_path.exists():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Missing reference audio: {ref_audio_path}",
+                )
+            return ref_audio_path, character.voice.prompt_text.strip()
+
+        pack_voice_dir = settings.data_dir / "character_packs" / character.id / "voice_refs"
+        emotion_dir = pack_voice_dir / emotion
+        fallback_dir = pack_voice_dir / "neutral"
 
         ref_audio_path = emotion_dir / "ref_001.wav"
         ref_text_path = emotion_dir / "ref_001.txt"
@@ -92,6 +103,17 @@ class TTSService:
             prompt_text = ref_text_path.read_text(encoding="utf-8").strip()
 
         return ref_audio_path, prompt_text
+
+    def _resolve_reference_path(self, configured_path: str, character_id: str) -> Path:
+        path = Path(configured_path)
+        if path.is_absolute():
+            return path
+
+        backend_relative = (settings.data_dir.parent / path).resolve()
+        if backend_relative.exists() or configured_path.startswith((".", "data/")):
+            return backend_relative
+
+        return (settings.data_dir / "character_packs" / character_id / path).resolve()
 
     def _filename(self, character_id: str, emotion: str) -> str:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")

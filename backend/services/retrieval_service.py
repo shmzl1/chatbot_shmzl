@@ -1,39 +1,39 @@
-import json
 import re
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from fastapi import HTTPException
 
 from core.config import settings
+from services.character_service import character_service
 
 
 RetrievalHit = Dict[str, Any]
 
 
 class RetrievalService:
-    def __init__(self, data_dir: Path) -> None:
-        self.data_dir = data_dir
-
     def retrieve(self, character_id: str, query: str) -> Dict[str, List[RetrievalHit]]:
+        character = character_service.get_character(character_id)
         return {
-            "lore": self._retrieve_from_jsonl(
-                self.data_dir / "lore" / f"{character_id}_lore.jsonl",
+            "lore": self._retrieve_from_items(
+                character.lore,
                 query,
                 settings.top_k_lore,
                 "lore",
+                character.id,
             ),
-            "dialogues": self._retrieve_from_jsonl(
-                self.data_dir / "dialogues" / f"{character_id}_dialogues.jsonl",
+            "dialogues": self._retrieve_from_items(
+                character.dialogues,
                 query,
                 settings.top_k_dialogue,
                 "dialogue",
+                character.id,
             ),
-            "reactions": self._retrieve_from_jsonl(
-                self.data_dir / "reactions" / f"{character_id}_reactions.jsonl",
+            "reactions": self._retrieve_from_items(
+                character.reactions,
                 query,
                 settings.top_k_reaction,
                 "reaction",
+                character.id,
             ),
         }
 
@@ -44,24 +44,29 @@ class RetrievalService:
             "used_reactions": [str(hit["id"]) for hit in context.get("reactions", [])],
         }
 
-    def _retrieve_from_jsonl(
+    def _retrieve_from_items(
         self,
-        file_path: Path,
+        items: List[Dict[str, Any]],
         query: str,
         top_k: int,
         source: str,
+        character_id: str,
     ) -> List[RetrievalHit]:
         if top_k <= 0:
             return []
-        if not file_path.exists():
+        if not isinstance(items, list):
             raise HTTPException(
                 status_code=500,
-                detail=f"Retrieval file is missing: {file_path}",
+                detail=f"Character pack '{character_id}' field for {source} must be an array.",
             )
 
-        documents = self._load_jsonl(file_path)
         scored: List[Tuple[int, int, Dict[str, Any], str]] = []
-        for index, payload in enumerate(documents):
+        for index, payload in enumerate(items):
+            if not isinstance(payload, dict):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Character pack '{character_id}' {source}[{index}] must be an object.",
+                )
             text = self._flatten_text(payload)
             score = self._score(text, query)
             scored.append((score, index, payload, text))
@@ -80,29 +85,6 @@ class RetrievalService:
             }
             for score, _, payload, text in chosen
         ]
-
-    def _load_jsonl(self, file_path: Path) -> List[Dict[str, Any]]:
-        documents: List[Dict[str, Any]] = []
-        with file_path.open("r", encoding="utf-8") as file:
-            for line_no, line in enumerate(file, start=1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError as exc:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Invalid JSONL in {file_path} at line {line_no}: {exc}",
-                    ) from exc
-                if not isinstance(item, dict):
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"JSONL item in {file_path} at line {line_no} must be an object.",
-                    )
-                documents.append(item)
-
-        return documents
 
     def _score(self, text: str, query: str) -> int:
         haystack = self._normalize(text)
@@ -140,4 +122,4 @@ class RetrievalService:
         return text.lower().strip()
 
 
-retrieval_service = RetrievalService(settings.data_dir)
+retrieval_service = RetrievalService()

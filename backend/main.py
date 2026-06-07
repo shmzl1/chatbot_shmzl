@@ -6,6 +6,7 @@ from api.auth_api import router as auth_router
 from api.chat_api import router as chat_router
 from api.character_api import router as character_router
 from api.debug_api import router as debug_router
+from api.feedback_api import router as feedback_router
 from api.health_api import router as health_router
 from api.knowledge_api import router as knowledge_router
 from api.memory_api import router as memory_router
@@ -24,6 +25,7 @@ app.include_router(auth_router)
 app.include_router(character_router)
 app.include_router(chat_router)
 app.include_router(debug_router)
+app.include_router(feedback_router)
 app.include_router(knowledge_router)
 app.include_router(memory_router)
 app.include_router(voice_router)

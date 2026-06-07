@@ -11,7 +11,9 @@ from core.schemas import (
     UserRecord,
 )
 from services.auth_service import get_current_user
+from services.character_service import character_service
 from services.database_service import database_service
+from services.persona_review_service import persona_review_service
 
 
 router = APIRouter(prefix="/debug", tags=["debug"])
@@ -25,6 +27,16 @@ def database_info() -> DatabaseInfoResponse:
 @router.get("/export")
 def export_debug_data() -> JSONResponse:
     return JSONResponse(content=database_service.export_data())
+
+
+@router.get("/characters")
+def debug_characters() -> JSONResponse:
+    return JSONResponse(content={"characters": character_service.validate_all_packs()})
+
+
+@router.get("/characters/{character_id}")
+def debug_character(character_id: str) -> JSONResponse:
+    return JSONResponse(content=persona_review_service.debug(character_id))
 
 
 @router.get("/sessions", response_model=ChatSessionListResponse)

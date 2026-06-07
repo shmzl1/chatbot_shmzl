@@ -8,9 +8,22 @@ const state = {
   currentSessionId: null,
   currentTurnId: null,
   memorySuggestions: [],
+  personaReview: null,
   characters: [],
   sessions: [],
 };
+
+const PERSONA_FEEDBACK_OPTIONS = [
+  { label: "符合人设", rating: "good", tags: ["fits_persona"] },
+  { label: "不符合人设", rating: "bad", tags: ["out_of_character"] },
+  { label: "太 AI", rating: "bad", tags: ["too_ai"] },
+  { label: "太温柔", rating: "bad", tags: ["too_soft"] },
+  { label: "太冷淡", rating: "bad", tags: ["too_cold"] },
+  { label: "太刺人", rating: "bad", tags: ["too_harsh"] },
+  { label: "太啰嗦", rating: "bad", tags: ["too_verbose"] },
+  { label: "不像角色", rating: "bad", tags: ["out_of_character"] },
+  { label: "这条很好，保留这种风格", rating: "good", tags: ["keep_style"] },
+];
 
 const elements = {
   activeSessionTitle: document.querySelector("#activeSessionTitle"),
@@ -57,12 +70,17 @@ const elements = {
   messageInput: document.querySelector("#messageInput"),
   messages: document.querySelector("#messages"),
   newSessionButton: document.querySelector("#newSessionButton"),
+  applyPersonaButton: document.querySelector("#applyPersonaButton"),
+  personaFeedbackStats: document.querySelector("#personaFeedbackStats"),
+  personaReviewPreview: document.querySelector("#personaReviewPreview"),
   promptToggle: document.querySelector("#promptToggle"),
   rawDebug: document.querySelector("#rawDebug"),
   refreshKnowledgeButton: document.querySelector("#refreshKnowledgeButton"),
   refreshMemoriesButton: document.querySelector("#refreshMemoriesButton"),
+  refreshPersonaFeedbackButton: document.querySelector("#refreshPersonaFeedbackButton"),
   refreshSessionsButton: document.querySelector("#refreshSessionsButton"),
   retrievalList: document.querySelector("#retrievalList"),
+  rollbackPersonaButton: document.querySelector("#rollbackPersonaButton"),
   saveCharacterButton: document.querySelector("#saveCharacterButton"),
   sendButton: document.querySelector("#sendButton"),
   sessionList: document.querySelector("#sessionList"),
@@ -76,6 +94,7 @@ const elements = {
   setupPasswordInput: document.querySelector("#setupPasswordInput"),
   setupUsernameInput: document.querySelector("#setupUsernameInput"),
   statusText: document.querySelector("#statusText"),
+  summarizePersonaButton: document.querySelector("#summarizePersonaButton"),
   userAvatarInput: document.querySelector("#userAvatarInput"),
   voiceTestEmotionSelect: document.querySelector("#voiceTestEmotionSelect"),
   voiceTestForm: document.querySelector("#voiceTestForm"),
@@ -271,7 +290,52 @@ function renderDatabaseInfo(info) {
     <div class="database-row"><span>Memories</span><strong>${escapeHtml(info.memory_count ?? 0)}</strong></div>
     <div class="database-row"><span>Knowledge</span><strong>${escapeHtml(info.knowledge_count ?? 0)}</strong></div>
     <div class="database-row"><span>Feedback</span><strong>${escapeHtml(info.feedback_count ?? 0)}</strong></div>
+    <div class="database-row"><span>Persona</span><strong>${escapeHtml(info.persona_feedback_count ?? 0)}</strong></div>
     <div class="database-path">${escapeHtml(info.database_url || "")}</div>
+  `;
+}
+
+function renderPersonaFeedbackStats(payload) {
+  if (!payload) {
+    elements.personaFeedbackStats.innerHTML = `<div class="empty-state">暂无人设反馈</div>`;
+    return;
+  }
+  const counts = payload.rating_counts || {};
+  const topIssues = Array.isArray(payload.top_issues) && payload.top_issues.length
+    ? payload.top_issues.map((item) => `${item.tag}:${item.count}`).join("，")
+    : "无";
+  elements.personaFeedbackStats.innerHTML = `
+    <div class="database-row"><span>总数</span><strong>${escapeHtml(payload.total_feedback ?? 0)}</strong></div>
+    <div class="database-row"><span>good</span><strong>${escapeHtml(counts.good ?? 0)}</strong></div>
+    <div class="database-row"><span>bad</span><strong>${escapeHtml(counts.bad ?? 0)}</strong></div>
+    <div class="database-row"><span>neutral</span><strong>${escapeHtml(counts.neutral ?? 0)}</strong></div>
+    <div class="database-path">${escapeHtml(topIssues)}</div>
+  `;
+}
+
+function renderPersonaReview(review) {
+  state.personaReview = review;
+  elements.applyPersonaButton.disabled = !review?.preview_character_json;
+  if (!review) {
+    elements.personaReviewPreview.innerHTML = `<div class="empty-state">还没有生成修改建议</div>`;
+    return;
+  }
+  const sections = [
+    ["主要问题", review.main_issues],
+    ["太 AI", review.too_ai_expressions],
+    ["不像人设", review.out_of_character],
+    ["应加强", review.strengthen_styles],
+    ["应删除/弱化", review.remove_styles],
+    ["风险", review.risk_notes],
+  ];
+  elements.personaReviewPreview.innerHTML = `
+    ${sections
+      .map(([label, values]) => {
+        const text = Array.isArray(values) && values.length ? values.join("；") : "无";
+        return `<div class="database-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(text)}</strong></div>`;
+      })
+      .join("")}
+    <pre>${escapeHtml(JSON.stringify(review.preview_character_json || {}, null, 2))}</pre>
   `;
 }
 
@@ -363,6 +427,28 @@ function renderKnowledge(items) {
     .join("");
 }
 
+function personaFeedbackMarkup(turn) {
+  const chips = PERSONA_FEEDBACK_OPTIONS.map((option) => {
+    return `
+      <button
+        class="${escapeHtml(option.rating)}"
+        type="button"
+        data-persona-feedback="1"
+        data-turn-id="${escapeHtml(turn.id)}"
+        data-rating="${escapeHtml(option.rating)}"
+        data-tags="${escapeHtml(option.tags.join(","))}"
+      >${escapeHtml(option.label)}</button>
+    `;
+  }).join("");
+  return `
+    <div class="persona-feedback" data-persona-feedback-panel="${escapeHtml(turn.id)}">
+      <textarea rows="2" placeholder="可选备注..."></textarea>
+      <div class="persona-feedback-chips">${chips}</div>
+      <div class="persona-feedback-status"></div>
+    </div>
+  `;
+}
+
 function turnMarkup(turn) {
   const audioPath = turn.debug?.audio_path;
   const audio = audioPath ? `<audio class="audio-player" controls src="${escapeHtml(audioPath)}"></audio>` : "";
@@ -380,6 +466,7 @@ function turnMarkup(turn) {
           <div>${escapeHtml(turn.reply)}</div>
           <span class="emotion">${escapeHtml(turn.emotion)}</span>
           ${audio}
+          ${personaFeedbackMarkup(turn)}
         </div>
       </div>
     </article>
@@ -522,6 +609,109 @@ async function loadKnowledge() {
   renderKnowledge(payload.items || []);
 }
 
+async function loadPersonaFeedbackStats() {
+  const payload = await requestJson(`/feedback/persona/${encodeURIComponent(getCharacterId())}`);
+  renderPersonaFeedbackStats(payload);
+}
+
+async function submitPersonaFeedback(button) {
+  const turnId = Number(button.dataset.turnId || 0);
+  const panel = button.closest("[data-persona-feedback-panel]");
+  const status = panel.querySelector(".persona-feedback-status");
+  const comment = panel.querySelector("textarea")?.value.trim() || "";
+  const turn = await findTurnForFeedback(turnId);
+  if (!turn) {
+    window.alert("没有找到这条回复。");
+    return;
+  }
+  status.textContent = "保存中...";
+  await requestJson("/feedback/persona/turn", {
+    method: "POST",
+    body: JSON.stringify({
+      character_id: turn.character_id || getCharacterId(),
+      session_id: turn.session_id || state.currentSessionId,
+      turn_id: turn.id,
+      user_message: turn.user_message,
+      assistant_message: turn.reply,
+      rating: button.dataset.rating || "neutral",
+      issue_tags: (button.dataset.tags || "").split(",").filter(Boolean),
+      comment,
+    }),
+  });
+  status.textContent = "已保存";
+  panel.querySelector("textarea").value = "";
+  await loadPersonaFeedbackStats();
+  await loadDatabaseInfo();
+}
+
+async function findTurnForFeedback(turnId) {
+  if (!state.currentSessionId) {
+    return null;
+  }
+  const payload = await requestJson(`/debug/sessions/${encodeURIComponent(state.currentSessionId)}/turns`);
+  return (payload.turns || []).find((turn) => Number(turn.id) === Number(turnId));
+}
+
+async function summarizePersonaReview() {
+  elements.summarizePersonaButton.disabled = true;
+  elements.personaReviewPreview.innerHTML = `<div class="empty-state">生成中...</div>`;
+  try {
+    const payload = await requestJson(
+      `/characters/${encodeURIComponent(getCharacterId())}/persona-review/summarize`,
+      {
+        method: "POST",
+        body: JSON.stringify({ limit: 30 }),
+      },
+    );
+    renderPersonaReview(payload);
+    setStatus("Persona review ready");
+  } finally {
+    elements.summarizePersonaButton.disabled = false;
+  }
+}
+
+async function applyPersonaReview() {
+  if (!state.personaReview?.preview_character_json) {
+    window.alert("请先生成修改建议。");
+    return;
+  }
+  if (!window.confirm("确认应用这次人设修改？当前 character.json 会先备份为上一版。")) {
+    return;
+  }
+  const payload = await requestJson(
+    `/characters/${encodeURIComponent(getCharacterId())}/persona-review/apply`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        preview_character_json: state.personaReview.preview_character_json,
+        review_summary: state.personaReview,
+      }),
+    },
+  );
+  renderPersonaReview(null);
+  await loadCharacters();
+  setCharacterId(payload.character?.id || getCharacterId());
+  await loadCharacterCard();
+  await loadPersonaFeedbackStats();
+  setStatus(`Persona applied: ${(payload.changed_fields || []).join(", ")}`);
+}
+
+async function rollbackPersonaReview() {
+  if (!window.confirm("回滚到上一版人设？当前 character.json 会被上一版覆盖。")) {
+    return;
+  }
+  const payload = await requestJson(
+    `/characters/${encodeURIComponent(getCharacterId())}/persona-review/rollback`,
+    { method: "POST" },
+  );
+  renderPersonaReview(null);
+  await loadCharacters();
+  setCharacterId(payload.character?.id || getCharacterId());
+  await loadCharacterCard();
+  await loadPersonaFeedbackStats();
+  setStatus("Persona rolled back");
+}
+
 async function loadSession(sessionId) {
   state.currentSessionId = sessionId;
   elements.activeSessionTitle.textContent = `会话 ${sessionId.slice(0, 8)}`;
@@ -632,6 +822,7 @@ async function initializeApp() {
   await loadDatabaseInfo();
   await loadMemories();
   await loadKnowledge();
+  await loadPersonaFeedbackStats();
   startNewSession();
 }
 
@@ -752,12 +943,16 @@ elements.settingsCharacterSelect.addEventListener("change", async () => {
   await loadCharacterCard();
   await loadMemories();
   await loadKnowledge();
+  await loadPersonaFeedbackStats();
+  renderPersonaReview(null);
 });
 elements.characterSelect.addEventListener("change", async () => {
   setCharacterId(elements.characterSelect.value);
   await loadCharacterCard();
   await loadMemories();
   await loadKnowledge();
+  await loadPersonaFeedbackStats();
+  renderPersonaReview(null);
 });
 elements.refreshSessionsButton.addEventListener("click", async () => {
   await loadSessions();
@@ -792,6 +987,32 @@ elements.clearSessionsButton.addEventListener("click", async () => {
 });
 elements.refreshMemoriesButton.addEventListener("click", loadMemories);
 elements.refreshKnowledgeButton.addEventListener("click", loadKnowledge);
+elements.refreshPersonaFeedbackButton.addEventListener("click", loadPersonaFeedbackStats);
+elements.summarizePersonaButton.addEventListener("click", async () => {
+  try {
+    await summarizePersonaReview();
+  } catch (error) {
+    elements.personaReviewPreview.innerHTML = `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`;
+    setStatus("Error");
+  }
+});
+elements.applyPersonaButton.addEventListener("click", async () => {
+  try {
+    await applyPersonaReview();
+    await loadPersonaFeedbackStats();
+  } catch (error) {
+    window.alert(friendlyError(error));
+    setStatus("Error");
+  }
+});
+elements.rollbackPersonaButton.addEventListener("click", async () => {
+  try {
+    await rollbackPersonaReview();
+  } catch (error) {
+    window.alert(friendlyError(error));
+    setStatus("Error");
+  }
+});
 elements.importKnowledgeButton.addEventListener("click", async () => {
   await requestJson(`/knowledge/import-jsonl?character_id=${encodeURIComponent(getCharacterId())}`, { method: "POST" });
   await loadKnowledge();
@@ -877,6 +1098,23 @@ elements.knowledgeList.addEventListener("click", async (event) => {
   await requestJson(`/knowledge/${encodeURIComponent(button.dataset.knowledgeId)}`, { method: "DELETE" });
   await loadKnowledge();
   await loadDatabaseInfo();
+});
+elements.messages.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-persona-feedback]");
+  if (!button) {
+    return;
+  }
+  try {
+    await submitPersonaFeedback(button);
+  } catch (error) {
+    const panel = button.closest("[data-persona-feedback-panel]");
+    const status = panel?.querySelector(".persona-feedback-status");
+    if (status) {
+      status.textContent = friendlyError(error);
+    } else {
+      window.alert(friendlyError(error));
+    }
+  }
 });
 
 async function saveSuggestion(index) {

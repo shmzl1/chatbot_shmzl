@@ -21,7 +21,7 @@ chatbot/
     api/                   接口路由
     core/                  配置、Schema、安全工具
     services/              LLM、数据库、认证、头像、记忆、知识库等服务
-    data/                  角色卡、示例资料、上传目录
+    data/                  角色包、示例资料、上传目录
     requirements.txt       后端依赖
     .env.example           后端环境变量示例
   frontend/simple_web/     浏览器前端
@@ -191,7 +191,7 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 
 收尾安全验证：
 - `.env` 中缺少 `OPENAI_API_KEY`、`OPENAI_MODEL` 或 `OPENAI_BASE_URL` 时，聊天接口应该显示明确配置错误，不自动 mock。
-- 检索 JSONL 文件缺失或格式错误时，后端应该显示具体文件路径和行号。
+- 角色包缺少 `character.json`、JSON 格式错误或 `lore/dialogues/reactions` 字段错误时，后端应该显示具体文件路径。
 - 上传头像真实文件保存在 `backend/data/uploads/`，不会被提交到 Git；只保留 `.gitkeep` 目录占位文件。
 
 ## 重置本地数据
@@ -248,15 +248,133 @@ Get-Content .\backup_role_chatbot.sql | docker exec -i role-chatbot-postgres psq
 
 ## 错误暴露策略
 
-当前项目优先本地调试，默认关闭静默兜底。配置错误、数据库错误、migration 错误、模型调用错误、角色文件错误、知识库 JSONL 错误、语音服务错误会直接暴露，方便定位问题。
+当前项目优先本地调试，默认关闭静默兜底。配置错误、数据库错误、migration 错误、模型调用错误、角色包错误、知识库 JSONL 错误、语音服务错误会直接暴露，方便定位问题。
 
 - 数据库不可用时，聊天和会话接口会返回明确数据库错误，不返回空数据。
 - LLM_PROVIDER 默认使用 `openai`。`LLM_PROVIDER=auto` 不会自动切换 mock；`OPENAI_API_KEY`、`OPENAI_MODEL`、`OPENAI_BASE_URL` 缺失或模型接口失败时，聊天接口会直接报错，前端显示后端返回的 detail。
-- 角色 JSON、检索 JSONL 格式错误会报具体文件和行号。
+- 角色包 `character.json` 缺失、JSON 格式错误或字段格式错误会报具体文件路径。
 - `voice=true` 且 GPT-SoVITS 不可用时会返回语音服务错误；`voice=false` 仍可只走文本。
 - 前端会优先显示后端返回的 `detail`；如果没有 `detail`，会显示 HTTP 状态码和接口路径。
 
 如果以后需要演示模式，可以单独增加 `DEMO_MODE=true`，但默认不启用。
+
+## 如何新增角色
+
+推荐使用角色包。新增角色只需要维护一个 `character.json`：
+
+```text
+backend/data/character_packs/{character_id}/character.json
+```
+
+1. 生成角色包：
+
+```powershell
+cd backend
+python -m tools.character_pack new asa_mitaka --name "三鹰朝"
+```
+
+2. 编辑角色配置：
+
+```text
+backend/data/character_packs/asa_mitaka/character.json
+```
+
+3. 校验角色包：
+
+```powershell
+python -m tools.character_pack validate asa_mitaka
+```
+
+4. 启动后端并打开网页：
+
+```text
+http://127.0.0.1:8000/app/
+```
+
+5. 如果角色没有出现，打开 debug 接口查看错误：
+
+```text
+http://127.0.0.1:8000/debug/characters
+```
+
+说明：
+
+- 新角色只需要维护一个 `character.json`。
+- 不再推荐手动创建 `lore/dialogues/reactions` 分散 JSONL 文件。
+- 语音文件放在角色包自己的 `voice_refs` 目录，例如 `backend/data/character_packs/asa_mitaka/voice_refs/neutral/ref_001.wav`。
+- 语音 `wav`、模型权重、头像素材不要提交到 GitHub。
+- 角色头像仍可以在网页里上传。
+
+## 人设反馈与自动修正
+
+聊天页面里，每条角色回复旁边都有一组人设评价按钮，例如“符合人设”“不符合人设”“太 AI”“太温柔”“太冷淡”“太刺人”“太啰嗦”“不像角色”“这条很好，保留这种风格”。备注可以写，也可以不写。提交后会写入 `persona_turn_feedback`，不会立刻修改角色文件。
+
+查看当前角色反馈统计：
+
+```text
+GET /feedback/persona/{character_id}
+```
+
+调试面板里的“人设反馈”区域会显示总反馈数、good / bad / neutral 数量、最近 issue_tags 统计和主要问题。也可以用：
+
+```text
+GET /debug/characters/{character_id}
+```
+
+查看 `character.json` 是否合法、`style_contract` / `evaluation_criteria` 是否存在、`bad_examples` 和 `revision_notes` 数量、人设反馈数量、上一版备份是否存在，以及最近一次修改摘要。
+
+生成 AI 修改建议：
+
+```text
+POST /characters/{character_id}/persona-review/summarize
+```
+
+这个接口只生成建议和 `preview_character_json`，不会写入文件。反馈少于 5 条时，只建议轻量修改，不建议大改。
+
+用户确认后应用修改：
+
+```text
+POST /characters/{character_id}/persona-review/apply
+```
+
+应用前会把当前文件备份为：
+
+```text
+backend/data/character_packs/{character_id}/backups/character.previous.json
+```
+
+每个角色最多只保留上一版备份。多次应用会覆盖更早的 `character.previous.json`。如果想长期保存某个版本，需要手动把 `character.json` 复制到别处。
+
+回滚上一版：
+
+```text
+POST /characters/{character_id}/persona-review/rollback
+```
+
+回滚前会检查上一版备份是否存在、JSON 是否合法、`id` 是否匹配、角色包校验是否通过。校验失败不会覆盖当前 `character.json`。
+
+AI 自动修改时优先允许改：
+
+- `style_contract`
+- `speaking_style`
+- `forbidden`
+- `dialogues`
+- `reactions`
+- `bad_examples`
+- `evaluation_criteria`
+- `revision_notes`
+
+禁止 AI 自动改：
+
+- `id`
+- `display_name`
+- `avatar_url`
+- `voice`
+- `gptsovits_base_url`
+- `ref_audio_path`
+- `prompt_text`
+
+不建议反馈很少时频繁修改人设。更稳的做法是先积累几条明确反馈，再生成修改建议，预览无误后再确认应用。
 
 ## 注意事项
 

@@ -150,6 +150,19 @@
           </form>
         </section>
         <section class="debug-section">
+          <div class="section-title-row">
+            <h3>人设反馈</h3>
+            <button id="refreshPersonaFeedbackButton" class="text-button" type="button">刷新</button>
+          </div>
+          <div id="personaFeedbackStats" class="persona-feedback-stats"></div>
+          <div class="persona-review-actions">
+            <button id="summarizePersonaButton" class="wide-button" type="button">生成修改建议</button>
+            <button id="applyPersonaButton" class="wide-button secondary" type="button" disabled>确认应用修改</button>
+            <button id="rollbackPersonaButton" class="wide-button danger" type="button">回滚上一版人设</button>
+          </div>
+          <div id="personaReviewPreview" class="persona-review-preview"></div>
+        </section>
+        <section class="debug-section">
           <h3>语音测试</h3>
           <form id="voiceTestForm" class="voice-test-form">
             <textarea id="voiceTestTextInput" rows="2" placeholder="输入要合成的文本..."></textarea>

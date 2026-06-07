@@ -1,6 +1,7 @@
 import json
 import re
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -205,6 +206,9 @@ class DatabaseService:
             feedback_row = connection.execute(
                 "SELECT COUNT(*) AS count FROM turn_feedback"
             ).fetchone()
+            persona_feedback_row = connection.execute(
+                "SELECT COUNT(*) AS count FROM persona_turn_feedback"
+            ).fetchone()
 
         return {
             "database_backend": "postgresql",
@@ -214,6 +218,9 @@ class DatabaseService:
             "memory_count": int(memory_row["count"]) if memory_row else 0,
             "knowledge_count": int(knowledge_row["count"]) if knowledge_row else 0,
             "feedback_count": int(feedback_row["count"]) if feedback_row else 0,
+            "persona_feedback_count": (
+                int(persona_feedback_row["count"]) if persona_feedback_row else 0
+            ),
         }
 
     def is_ready(self) -> bool:
@@ -554,6 +561,101 @@ class DatabaseService:
             "created_at": self._as_text(row["created_at"]),
         }
 
+    def save_persona_turn_feedback(
+        self,
+        *,
+        character_id: str,
+        session_id: Optional[str],
+        turn_id: Optional[int],
+        user_message: str,
+        assistant_message: str,
+        rating: str,
+        issue_tags: List[str],
+        comment: str,
+    ) -> Dict[str, Any]:
+        self._ensure_database()
+        now = _now()
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO persona_turn_feedback (
+                    character_id,
+                    session_id,
+                    turn_id,
+                    user_message,
+                    assistant_message,
+                    rating,
+                    issue_tags_json,
+                    comment,
+                    created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING *
+                """,
+                (
+                    character_id,
+                    session_id,
+                    turn_id,
+                    user_message,
+                    assistant_message,
+                    rating,
+                    Json(issue_tags),
+                    comment,
+                    now,
+                ),
+            ).fetchone()
+        return self._row_to_persona_feedback(row)
+
+    def persona_feedback_summary(
+        self,
+        *,
+        character_id: str,
+        limit: int = 30,
+    ) -> Dict[str, Any]:
+        feedback = self.list_persona_feedback(character_id=character_id, limit=limit)
+        all_feedback = self.list_persona_feedback(character_id=character_id, limit=500)
+        rating_counts = Counter(item["rating"] for item in all_feedback)
+        tag_counts: Counter[str] = Counter()
+        for item in all_feedback:
+            tag_counts.update(str(tag) for tag in item["issue_tags"])
+
+        return {
+            "character_id": character_id,
+            "total_feedback": len(all_feedback),
+            "rating_counts": {
+                "good": rating_counts.get("good", 0),
+                "bad": rating_counts.get("bad", 0),
+                "neutral": rating_counts.get("neutral", 0),
+            },
+            "issue_tag_counts": dict(tag_counts.most_common()),
+            "top_issues": [
+                {"tag": tag, "count": count}
+                for tag, count in tag_counts.most_common(5)
+            ],
+            "recent_feedback": feedback,
+        }
+
+    def list_persona_feedback(
+        self,
+        *,
+        character_id: str,
+        limit: int = 30,
+    ) -> List[Dict[str, Any]]:
+        self._ensure_database()
+        safe_limit = max(1, min(limit, 500))
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM persona_turn_feedback
+                WHERE character_id = %s
+                ORDER BY created_at DESC, id DESC
+                LIMIT %s
+                """,
+                (character_id, safe_limit),
+            ).fetchall()
+        return [self._row_to_persona_feedback(row) for row in rows]
+
     def export_data(self) -> Dict[str, Any]:
         self._ensure_database()
         with self._connect() as connection:
@@ -569,6 +671,9 @@ class DatabaseService:
             feedback = connection.execute(
                 "SELECT * FROM turn_feedback ORDER BY id ASC"
             ).fetchall()
+            persona_feedback = connection.execute(
+                "SELECT * FROM persona_turn_feedback ORDER BY id ASC"
+            ).fetchall()
             knowledge = connection.execute(
                 "SELECT * FROM knowledge_items ORDER BY id ASC"
             ).fetchall()
@@ -580,6 +685,7 @@ class DatabaseService:
             "memories": [self._plain_row(row) for row in memories],
             "knowledge": [self._plain_row(row) for row in knowledge],
             "feedback": [self._plain_row(row) for row in feedback],
+            "persona_feedback": [self._plain_row(row) for row in persona_feedback],
         }
 
     def create_knowledge(
@@ -861,6 +967,29 @@ class DatabaseService:
             created_at=self._as_text(row["created_at"]),
             updated_at=self._as_text(row["updated_at"]),
         )
+
+    def _row_to_persona_feedback(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        tags = self._ensure_json(
+            row["issue_tags_json"],
+            "persona_turn_feedback.issue_tags_json",
+        )
+        if not isinstance(tags, list):
+            raise HTTPException(
+                status_code=500,
+                detail=f"persona_turn_feedback.issue_tags_json for feedback {row['id']} must be a list.",
+            )
+        return {
+            "id": row["id"],
+            "character_id": row["character_id"],
+            "session_id": row["session_id"],
+            "turn_id": row["turn_id"],
+            "user_message": row["user_message"],
+            "assistant_message": row["assistant_message"],
+            "rating": row["rating"],
+            "issue_tags": [str(tag) for tag in tags],
+            "comment": row["comment"],
+            "created_at": self._as_text(row["created_at"]),
+        }
 
     def _knowledge_exists(
         self,

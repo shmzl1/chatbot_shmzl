@@ -30,6 +30,11 @@ class LLMService:
         self._validate_llm_settings()
         return self._generate_with_openai(prompt)
 
+    def generate_json(self, prompt: str, system_message: str) -> Dict[str, Any]:
+        self._validate_llm_settings()
+        raw_text = self._chat_completion(prompt, system_message)
+        return self._load_json(raw_text)
+
     def _validate_llm_settings(self) -> None:
         provider = settings.llm_provider.lower()
         if provider == "mock":
@@ -57,6 +62,16 @@ class LLMService:
             )
 
     def _generate_with_openai(self, prompt: str) -> LLMGeneration:
+        raw_text = self._chat_completion(prompt, "你是角色聊天回复生成器。你必须只输出 JSON。")
+        candidates = self._parse_candidates(raw_text)
+        return LLMGeneration(
+            candidates=candidates,
+            provider=provider_label(),
+            model=settings.openai_model,
+            raw_text=raw_text,
+        )
+
+    def _chat_completion(self, prompt: str, system_message: str) -> str:
         try:
             from openai import OpenAI
         except ImportError as exc:
@@ -79,10 +94,7 @@ class LLMService:
                 model=settings.openai_model,
                 temperature=settings.openai_temperature,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "你是角色聊天回复生成器。你必须只输出 JSON。",
-                    },
+                    {"role": "system", "content": system_message},
                     {"role": "user", "content": prompt},
                 ],
             )
@@ -92,14 +104,7 @@ class LLMService:
                 detail=f"LLM request failed: {exc}",
             ) from exc
 
-        raw_text = response.choices[0].message.content or ""
-        candidates = self._parse_candidates(raw_text)
-        return LLMGeneration(
-            candidates=candidates,
-            provider=provider_label(),
-            model=settings.openai_model,
-            raw_text=raw_text,
-        )
+        return response.choices[0].message.content or ""
 
     def _parse_candidates(self, raw_text: str) -> List[CandidateReply]:
         data = self._load_json(raw_text)

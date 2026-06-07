@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from core.schemas import AvatarUploadResponse, CharacterCard, CharacterListResponse, UserRecord
+from core.schemas import PersonaReviewApplyRequest, PersonaReviewSummarizeRequest
 from services.auth_service import get_current_user
 from services.avatar_service import avatar_service
 from services.character_service import character_service
 from services.database_service import database_service
+from services.persona_review_service import persona_review_service
 
 
 router = APIRouter(tags=["characters"])
@@ -56,3 +58,33 @@ async def upload_character_avatar(
     updated = character.copy(update={"avatar_url": avatar_url})
     character_service.save_character(updated)
     return AvatarUploadResponse(avatar_url=avatar_url)
+
+
+@router.post("/characters/{character_id}/persona-review/summarize")
+def summarize_persona_review(
+    character_id: str,
+    request: PersonaReviewSummarizeRequest,
+    current_user: UserRecord = Depends(get_current_user),
+) -> dict:
+    return persona_review_service.summarize(character_id=character_id, limit=request.limit)
+
+
+@router.post("/characters/{character_id}/persona-review/apply")
+def apply_persona_review(
+    character_id: str,
+    request: PersonaReviewApplyRequest,
+    current_user: UserRecord = Depends(get_current_user),
+) -> dict:
+    return persona_review_service.apply(
+        character_id=character_id,
+        preview_character_json=request.preview_character_json,
+        review_summary=request.review_summary,
+    )
+
+
+@router.post("/characters/{character_id}/persona-review/rollback")
+def rollback_persona_review(
+    character_id: str,
+    current_user: UserRecord = Depends(get_current_user),
+) -> dict:
+    return persona_review_service.rollback(character_id)
