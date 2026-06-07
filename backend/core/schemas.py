@@ -72,6 +72,30 @@ class PersonaReviewSummarizeRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=100)
 
 
+class PersonaReviewSelectedTurn(BaseModel):
+    turn_id: Optional[int] = None
+    session_id: Optional[str] = None
+    user_message: str = Field(..., min_length=1, max_length=4000)
+    assistant_message: str = Field(..., min_length=1, max_length=4000)
+
+
+class PersonaReviewHistoryMessage(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str = Field(..., min_length=1, max_length=8000)
+
+
+class PersonaReviewChatRequest(BaseModel):
+    selected_turns: List[PersonaReviewSelectedTurn] = Field(default_factory=list)
+    message: str = Field(..., min_length=1, max_length=4000)
+    history: List[PersonaReviewHistoryMessage] = Field(default_factory=list)
+
+
+class PersonaReviewFinalizeRequest(BaseModel):
+    selected_turns: List[PersonaReviewSelectedTurn] = Field(default_factory=list)
+    history: List[PersonaReviewHistoryMessage] = Field(default_factory=list)
+    limit: int = Field(default=30, ge=1, le=100)
+
+
 class PersonaReviewApplyRequest(BaseModel):
     preview_character_json: Dict[str, Any]
     review_summary: Dict[str, Any] = Field(default_factory=dict)

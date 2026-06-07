@@ -151,14 +151,26 @@
         </section>
         <section class="debug-section">
           <div class="section-title-row">
-            <h3>人设反馈</h3>
+            <h3>人设修改工作台</h3>
             <button id="refreshPersonaFeedbackButton" class="text-button" type="button">刷新</button>
           </div>
           <div id="personaFeedbackStats" class="persona-feedback-stats"></div>
+          <div id="selectedPersonaTurns" class="selected-persona-turns"></div>
+          <textarea
+            id="personaEditorInput"
+            class="persona-editor-input"
+            rows="4"
+            placeholder="写下你觉得这条回复哪里不像人设，或者哪里值得保留……"
+          ></textarea>
+          <div id="personaTagList" class="persona-tag-list"></div>
+          <div id="personaEditorChat" class="persona-editor-chat"></div>
           <div class="persona-review-actions">
-            <button id="summarizePersonaButton" class="wide-button" type="button">生成修改建议</button>
+            <button id="savePersonaFeedbackButton" class="wide-button secondary" type="button">保存这条反馈</button>
+            <button id="sendPersonaEditorButton" class="wide-button" type="button">发送给人设编辑 AI</button>
+            <button id="summarizePersonaButton" class="wide-button" type="button">生成最终修改方案</button>
             <button id="applyPersonaButton" class="wide-button secondary" type="button" disabled>确认应用修改</button>
             <button id="rollbackPersonaButton" class="wide-button danger" type="button">回滚上一版人设</button>
+            <button id="clearPersonaEditorButton" class="wide-button secondary" type="button">清空当前人设编辑对话</button>
           </div>
           <div id="personaReviewPreview" class="persona-review-preview"></div>
         </section>

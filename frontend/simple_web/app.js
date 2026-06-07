@@ -9,20 +9,29 @@ const state = {
   currentTurnId: null,
   memorySuggestions: [],
   personaReview: null,
+  personaEditorHistory: [],
+  selectedPersonaTurns: [],
   characters: [],
   sessions: [],
 };
 
-const PERSONA_FEEDBACK_OPTIONS = [
-  { label: "符合人设", rating: "good", tags: ["fits_persona"] },
-  { label: "不符合人设", rating: "bad", tags: ["out_of_character"] },
-  { label: "太 AI", rating: "bad", tags: ["too_ai"] },
-  { label: "太温柔", rating: "bad", tags: ["too_soft"] },
-  { label: "太冷淡", rating: "bad", tags: ["too_cold"] },
-  { label: "太刺人", rating: "bad", tags: ["too_harsh"] },
-  { label: "太啰嗦", rating: "bad", tags: ["too_verbose"] },
-  { label: "不像角色", rating: "bad", tags: ["out_of_character"] },
-  { label: "这条很好，保留这种风格", rating: "good", tags: ["keep_style"] },
+const PERSONA_TAG_OPTIONS = [
+  { label: "太 AI", tag: "too_ai" },
+  { label: "不像角色", tag: "out_of_character" },
+  { label: "太温柔", tag: "too_soft" },
+  { label: "太冷淡", tag: "too_cold" },
+  { label: "太刺人", tag: "too_harsh" },
+  { label: "太啰嗦", tag: "too_verbose" },
+  { label: "太客服", tag: "too_customer_service" },
+  { label: "太像心理咨询", tag: "too_therapy_like" },
+  { label: "缺少角色口癖", tag: "missing_character_phrase" },
+  { label: "缺少别扭感", tag: "missing_awkwardness" },
+  { label: "这句很好，保留", tag: "keep_style" },
+  { label: "语气对了", tag: "right_tone" },
+  { label: "这句可以作为样例", tag: "good_example" },
+  { label: "需要更像原角色", tag: "closer_to_original" },
+  { label: "需要更自然", tag: "more_natural" },
+  { label: "需要更短", tag: "shorter" },
 ];
 
 const elements = {
@@ -71,8 +80,12 @@ const elements = {
   messages: document.querySelector("#messages"),
   newSessionButton: document.querySelector("#newSessionButton"),
   applyPersonaButton: document.querySelector("#applyPersonaButton"),
+  clearPersonaEditorButton: document.querySelector("#clearPersonaEditorButton"),
   personaFeedbackStats: document.querySelector("#personaFeedbackStats"),
+  personaEditorChat: document.querySelector("#personaEditorChat"),
+  personaEditorInput: document.querySelector("#personaEditorInput"),
   personaReviewPreview: document.querySelector("#personaReviewPreview"),
+  personaTagList: document.querySelector("#personaTagList"),
   promptToggle: document.querySelector("#promptToggle"),
   rawDebug: document.querySelector("#rawDebug"),
   refreshKnowledgeButton: document.querySelector("#refreshKnowledgeButton"),
@@ -82,6 +95,9 @@ const elements = {
   retrievalList: document.querySelector("#retrievalList"),
   rollbackPersonaButton: document.querySelector("#rollbackPersonaButton"),
   saveCharacterButton: document.querySelector("#saveCharacterButton"),
+  savePersonaFeedbackButton: document.querySelector("#savePersonaFeedbackButton"),
+  selectedPersonaTurns: document.querySelector("#selectedPersonaTurns"),
+  sendPersonaEditorButton: document.querySelector("#sendPersonaEditorButton"),
   sendButton: document.querySelector("#sendButton"),
   sessionList: document.querySelector("#sessionList"),
   settingsButton: document.querySelector("#settingsButton"),
@@ -309,6 +325,8 @@ function renderPersonaFeedbackStats(payload) {
     <div class="database-row"><span>good</span><strong>${escapeHtml(counts.good ?? 0)}</strong></div>
     <div class="database-row"><span>bad</span><strong>${escapeHtml(counts.bad ?? 0)}</strong></div>
     <div class="database-row"><span>neutral</span><strong>${escapeHtml(counts.neutral ?? 0)}</strong></div>
+    <div class="database-row"><span>可回滚备份</span><strong>${payload.previous_backup_exists ? "有" : "无"}</strong></div>
+    <div class="database-row"><span>上次修改</span><strong>${escapeHtml(payload.last_revision_summary || "无")}</strong></div>
     <div class="database-path">${escapeHtml(topIssues)}</div>
   `;
 }
@@ -322,6 +340,8 @@ function renderPersonaReview(review) {
   }
   const sections = [
     ["主要问题", review.main_issues],
+    ["修改计划", review.revision_plan],
+    ["修改字段", review.changed_fields],
     ["太 AI", review.too_ai_expressions],
     ["不像人设", review.out_of_character],
     ["应加强", review.strengthen_styles],
@@ -337,6 +357,63 @@ function renderPersonaReview(review) {
       .join("")}
     <pre>${escapeHtml(JSON.stringify(review.preview_character_json || {}, null, 2))}</pre>
   `;
+}
+
+function renderPersonaTags() {
+  elements.personaTagList.innerHTML = PERSONA_TAG_OPTIONS.map((option) => {
+    return `<button type="button" data-persona-tag="${escapeHtml(option.tag)}">${escapeHtml(option.label)}</button>`;
+  }).join("");
+}
+
+function renderSelectedPersonaTurns() {
+  if (!state.selectedPersonaTurns.length) {
+    elements.selectedPersonaTurns.innerHTML = `<div class="empty-state">还没有选择对话。先在角色回复旁边点“选中用于人设修改”。</div>`;
+    return;
+  }
+  elements.selectedPersonaTurns.innerHTML = state.selectedPersonaTurns
+    .map((turn) => {
+      return `
+        <article class="selected-persona-turn">
+          <div class="memory-top">
+            <span>turn #${escapeHtml(turn.turn_id || "")}</span>
+            <button class="text-button danger" type="button" data-remove-persona-turn="${escapeHtml(turn.turn_id)}">取消选择</button>
+          </div>
+          <p><strong>用户：</strong>${escapeHtml(turn.user_message)}</p>
+          <p><strong>角色：</strong>${escapeHtml(turn.assistant_message)}</p>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderPersonaEditorChat() {
+  if (!state.personaEditorHistory.length) {
+    elements.personaEditorChat.innerHTML = `<div class="empty-state">这里会显示你和人设编辑 AI 的讨论。它不是当前角色，不会直接改文件。</div>`;
+    return;
+  }
+  elements.personaEditorChat.innerHTML = state.personaEditorHistory
+    .map((item) => {
+      const roleLabel = item.role === "assistant" ? "人设编辑 AI" : "你";
+      return `
+        <article class="persona-editor-message ${escapeHtml(item.role)}">
+          <strong>${escapeHtml(roleLabel)}</strong>
+          <p>${escapeHtml(item.content)}</p>
+        </article>
+      `;
+    })
+    .join("");
+  elements.personaEditorChat.scrollTop = elements.personaEditorChat.scrollHeight;
+}
+
+function clearPersonaWorkbench() {
+  state.personaReview = null;
+  state.personaEditorHistory = [];
+  state.selectedPersonaTurns = [];
+  elements.personaEditorInput.value = "";
+  renderPersonaReview(null);
+  renderPersonaEditorChat();
+  renderSelectedPersonaTurns();
+  renderMessagesSelectionState();
 }
 
 function renderMemories(memories) {
@@ -428,22 +505,14 @@ function renderKnowledge(items) {
 }
 
 function personaFeedbackMarkup(turn) {
-  const chips = PERSONA_FEEDBACK_OPTIONS.map((option) => {
-    return `
-      <button
-        class="${escapeHtml(option.rating)}"
-        type="button"
-        data-persona-feedback="1"
-        data-turn-id="${escapeHtml(turn.id)}"
-        data-rating="${escapeHtml(option.rating)}"
-        data-tags="${escapeHtml(option.tags.join(","))}"
-      >${escapeHtml(option.label)}</button>
-    `;
-  }).join("");
+  const selected = state.selectedPersonaTurns.some((item) => Number(item.turn_id) === Number(turn.id));
   return `
     <div class="persona-feedback" data-persona-feedback-panel="${escapeHtml(turn.id)}">
-      <textarea rows="2" placeholder="可选备注..."></textarea>
-      <div class="persona-feedback-chips">${chips}</div>
+      <button
+        class="persona-select-button${selected ? " selected" : ""}"
+        type="button"
+        data-select-persona-turn="${escapeHtml(turn.id)}"
+      >${selected ? "已选中用于人设修改" : "选中用于人设修改"}</button>
       <div class="persona-feedback-status"></div>
     </div>
   `;
@@ -479,7 +548,23 @@ function renderMessages(turns) {
     return;
   }
   elements.messages.innerHTML = turns.map(turnMarkup).join("");
+  renderMessagesSelectionState();
   elements.messages.scrollTop = elements.messages.scrollHeight;
+}
+
+function renderMessagesSelectionState() {
+  const selectedIds = new Set(state.selectedPersonaTurns.map((turn) => String(turn.turn_id)));
+  elements.messages.querySelectorAll("[data-persona-feedback-panel]").forEach((panel) => {
+    const turnId = panel.dataset.personaFeedbackPanel;
+    const selected = selectedIds.has(String(turnId));
+    const pair = panel.closest(".message-pair");
+    const button = panel.querySelector("[data-select-persona-turn]");
+    pair?.classList.toggle("persona-selected", selected);
+    if (button) {
+      button.classList.toggle("selected", selected);
+      button.textContent = selected ? "已选中用于人设修改" : "选中用于人设修改";
+    }
+  });
 }
 
 function renderDebugFromTurn(turn) {
@@ -610,38 +695,15 @@ async function loadKnowledge() {
 }
 
 async function loadPersonaFeedbackStats() {
-  const payload = await requestJson(`/feedback/persona/${encodeURIComponent(getCharacterId())}`);
-  renderPersonaFeedbackStats(payload);
-}
-
-async function submitPersonaFeedback(button) {
-  const turnId = Number(button.dataset.turnId || 0);
-  const panel = button.closest("[data-persona-feedback-panel]");
-  const status = panel.querySelector(".persona-feedback-status");
-  const comment = panel.querySelector("textarea")?.value.trim() || "";
-  const turn = await findTurnForFeedback(turnId);
-  if (!turn) {
-    window.alert("没有找到这条回复。");
-    return;
-  }
-  status.textContent = "保存中...";
-  await requestJson("/feedback/persona/turn", {
-    method: "POST",
-    body: JSON.stringify({
-      character_id: turn.character_id || getCharacterId(),
-      session_id: turn.session_id || state.currentSessionId,
-      turn_id: turn.id,
-      user_message: turn.user_message,
-      assistant_message: turn.reply,
-      rating: button.dataset.rating || "neutral",
-      issue_tags: (button.dataset.tags || "").split(",").filter(Boolean),
-      comment,
-    }),
+  const [feedback, debug] = await Promise.all([
+    requestJson(`/feedback/persona/${encodeURIComponent(getCharacterId())}`),
+    requestJson(`/debug/characters/${encodeURIComponent(getCharacterId())}`),
+  ]);
+  renderPersonaFeedbackStats({
+    ...feedback,
+    previous_backup_exists: debug.previous_backup_exists,
+    last_revision_summary: debug.last_revision_note?.summary || "",
   });
-  status.textContent = "已保存";
-  panel.querySelector("textarea").value = "";
-  await loadPersonaFeedbackStats();
-  await loadDatabaseInfo();
 }
 
 async function findTurnForFeedback(turnId) {
@@ -652,19 +714,149 @@ async function findTurnForFeedback(turnId) {
   return (payload.turns || []).find((turn) => Number(turn.id) === Number(turnId));
 }
 
-async function summarizePersonaReview() {
-  elements.summarizePersonaButton.disabled = true;
-  elements.personaReviewPreview.innerHTML = `<div class="empty-state">生成中...</div>`;
+async function togglePersonaTurnSelection(turnId) {
+  const existingIndex = state.selectedPersonaTurns.findIndex((turn) => Number(turn.turn_id) === Number(turnId));
+  if (existingIndex >= 0) {
+    state.selectedPersonaTurns.splice(existingIndex, 1);
+    renderSelectedPersonaTurns();
+    renderMessagesSelectionState();
+    return;
+  }
+  const turn = await findTurnForFeedback(turnId);
+  if (!turn) {
+    window.alert("没有找到这条回复。");
+    return;
+  }
+  state.selectedPersonaTurns.push({
+    turn_id: turn.id,
+    session_id: turn.session_id || state.currentSessionId,
+    user_message: turn.user_message,
+    assistant_message: turn.reply,
+  });
+  renderSelectedPersonaTurns();
+  renderMessagesSelectionState();
+}
+
+function appendPersonaTagText(text) {
+  const current = elements.personaEditorInput.value.trim();
+  elements.personaEditorInput.value = current ? `${current}；${text}` : text;
+  elements.personaEditorInput.focus();
+}
+
+function inferPersonaFeedback(comment) {
+  const text = comment.toLowerCase();
+  const tags = [];
+  const tagRules = [
+    ["太 ai", "too_ai"],
+    ["太ai", "too_ai"],
+    ["ai", "too_ai"],
+    ["不像", "out_of_character"],
+    ["太温柔", "too_soft"],
+    ["太冷淡", "too_cold"],
+    ["太刺", "too_harsh"],
+    ["太啰嗦", "too_verbose"],
+    ["太客服", "too_customer_service"],
+    ["心理咨询", "too_therapy_like"],
+    ["口癖", "missing_character_phrase"],
+    ["别扭", "missing_awkwardness"],
+    ["保留", "keep_style"],
+    ["很好", "keep_style"],
+    ["语气对了", "right_tone"],
+    ["样例", "good_example"],
+    ["更自然", "more_natural"],
+    ["更短", "shorter"],
+  ];
+  for (const [keyword, tag] of tagRules) {
+    if (text.includes(keyword) && !tags.includes(tag)) {
+      tags.push(tag);
+    }
+  }
+  const goodTags = ["keep_style", "right_tone", "good_example"];
+  const rating = tags.length && tags.every((tag) => goodTags.includes(tag)) ? "good" : "bad";
+  return {
+    rating: comment.trim() ? rating : "neutral",
+    issue_tags: tags,
+  };
+}
+
+async function saveSelectedPersonaFeedback() {
+  const comment = elements.personaEditorInput.value.trim();
+  if (!state.selectedPersonaTurns.length) {
+    window.alert("先选择至少一条角色回复。");
+    return;
+  }
+  if (!comment) {
+    window.alert("先写一点评价，或者点击标签插入常用评价。");
+    return;
+  }
+  const inferred = inferPersonaFeedback(comment);
+  for (const turn of state.selectedPersonaTurns) {
+    await requestJson("/feedback/persona/turn", {
+      method: "POST",
+      body: JSON.stringify({
+        character_id: getCharacterId(),
+        session_id: turn.session_id,
+        turn_id: turn.turn_id,
+        user_message: turn.user_message,
+        assistant_message: turn.assistant_message,
+        rating: inferred.rating,
+        issue_tags: inferred.issue_tags,
+        comment,
+      }),
+    });
+  }
+  await loadPersonaFeedbackStats();
+  await loadDatabaseInfo();
+  setStatus("Persona feedback saved");
+}
+
+async function sendPersonaEditorMessage() {
+  const message = elements.personaEditorInput.value.trim();
+  if (!message) {
+    window.alert("先写一点评价，或者点击标签插入常用评价。");
+    return;
+  }
+  elements.sendPersonaEditorButton.disabled = true;
   try {
+    state.personaEditorHistory.push({ role: "user", content: message });
+    renderPersonaEditorChat();
     const payload = await requestJson(
-      `/characters/${encodeURIComponent(getCharacterId())}/persona-review/summarize`,
+      `/characters/${encodeURIComponent(getCharacterId())}/persona-review/chat`,
       {
         method: "POST",
-        body: JSON.stringify({ limit: 30 }),
+        body: JSON.stringify({
+          selected_turns: state.selectedPersonaTurns,
+          message,
+          history: state.personaEditorHistory.slice(0, -1),
+        }),
+      },
+    );
+    state.personaEditorHistory = payload.history || state.personaEditorHistory;
+    elements.personaEditorInput.value = "";
+    renderPersonaEditorChat();
+    setStatus(payload.should_generate_final ? "Ready to finalize" : "Persona editor replied");
+  } finally {
+    elements.sendPersonaEditorButton.disabled = false;
+  }
+}
+
+async function summarizePersonaReview() {
+  elements.summarizePersonaButton.disabled = true;
+  elements.personaReviewPreview.innerHTML = `<div class="empty-state">生成最终方案中...</div>`;
+  try {
+    const payload = await requestJson(
+      `/characters/${encodeURIComponent(getCharacterId())}/persona-review/finalize`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          selected_turns: state.selectedPersonaTurns,
+          history: state.personaEditorHistory,
+          limit: 30,
+        }),
       },
     );
     renderPersonaReview(payload);
-    setStatus("Persona review ready");
+    setStatus("Persona final plan ready");
   } finally {
     elements.summarizePersonaButton.disabled = false;
   }
@@ -724,10 +916,13 @@ async function loadSession(sessionId) {
 function startNewSession() {
   state.currentSessionId = null;
   state.currentTurnId = null;
+  state.selectedPersonaTurns = [];
   elements.activeSessionTitle.textContent = "新会话";
   elements.messages.innerHTML = `<div class="empty-state centered">开始一轮新对话</div>`;
   renderDebug({ candidates: [], debug: {} });
   renderMemoryConfirmations([]);
+  renderSelectedPersonaTurns();
+  renderMessagesSelectionState();
   renderSessions();
   elements.messageInput.focus();
 }
@@ -823,6 +1018,10 @@ async function initializeApp() {
   await loadMemories();
   await loadKnowledge();
   await loadPersonaFeedbackStats();
+  renderPersonaTags();
+  renderSelectedPersonaTurns();
+  renderPersonaEditorChat();
+  renderPersonaReview(null);
   startNewSession();
 }
 
@@ -988,6 +1187,22 @@ elements.clearSessionsButton.addEventListener("click", async () => {
 elements.refreshMemoriesButton.addEventListener("click", loadMemories);
 elements.refreshKnowledgeButton.addEventListener("click", loadKnowledge);
 elements.refreshPersonaFeedbackButton.addEventListener("click", loadPersonaFeedbackStats);
+elements.savePersonaFeedbackButton.addEventListener("click", async () => {
+  try {
+    await saveSelectedPersonaFeedback();
+  } catch (error) {
+    window.alert(friendlyError(error));
+    setStatus("Error");
+  }
+});
+elements.sendPersonaEditorButton.addEventListener("click", async () => {
+  try {
+    await sendPersonaEditorMessage();
+  } catch (error) {
+    window.alert(friendlyError(error));
+    setStatus("Error");
+  }
+});
 elements.summarizePersonaButton.addEventListener("click", async () => {
   try {
     await summarizePersonaReview();
@@ -1012,6 +1227,25 @@ elements.rollbackPersonaButton.addEventListener("click", async () => {
     window.alert(friendlyError(error));
     setStatus("Error");
   }
+});
+elements.clearPersonaEditorButton.addEventListener("click", clearPersonaWorkbench);
+elements.personaTagList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-persona-tag]");
+  if (!button) {
+    return;
+  }
+  const option = PERSONA_TAG_OPTIONS.find((item) => item.tag === button.dataset.personaTag);
+  appendPersonaTagText(option?.label || button.textContent || "");
+});
+elements.selectedPersonaTurns.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-persona-turn]");
+  if (!button) {
+    return;
+  }
+  const turnId = Number(button.dataset.removePersonaTurn);
+  state.selectedPersonaTurns = state.selectedPersonaTurns.filter((turn) => Number(turn.turn_id) !== turnId);
+  renderSelectedPersonaTurns();
+  renderMessagesSelectionState();
 });
 elements.importKnowledgeButton.addEventListener("click", async () => {
   await requestJson(`/knowledge/import-jsonl?character_id=${encodeURIComponent(getCharacterId())}`, { method: "POST" });
@@ -1100,20 +1334,14 @@ elements.knowledgeList.addEventListener("click", async (event) => {
   await loadDatabaseInfo();
 });
 elements.messages.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-persona-feedback]");
-  if (!button) {
-    return;
-  }
-  try {
-    await submitPersonaFeedback(button);
-  } catch (error) {
-    const panel = button.closest("[data-persona-feedback-panel]");
-    const status = panel?.querySelector(".persona-feedback-status");
-    if (status) {
-      status.textContent = friendlyError(error);
-    } else {
+  const selectButton = event.target.closest("[data-select-persona-turn]");
+  if (selectButton) {
+    try {
+      await togglePersonaTurnSelection(selectButton.dataset.selectPersonaTurn);
+    } catch (error) {
       window.alert(friendlyError(error));
     }
+    return;
   }
 });
 

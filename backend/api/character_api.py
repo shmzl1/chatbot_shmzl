@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from core.schemas import AvatarUploadResponse, CharacterCard, CharacterListResponse, UserRecord
-from core.schemas import PersonaReviewApplyRequest, PersonaReviewSummarizeRequest
+from core.schemas import (
+    PersonaReviewApplyRequest,
+    PersonaReviewChatRequest,
+    PersonaReviewFinalizeRequest,
+    PersonaReviewSummarizeRequest,
+)
 from services.auth_service import get_current_user
 from services.avatar_service import avatar_service
 from services.character_service import character_service
@@ -67,6 +72,34 @@ def summarize_persona_review(
     current_user: UserRecord = Depends(get_current_user),
 ) -> dict:
     return persona_review_service.summarize(character_id=character_id, limit=request.limit)
+
+
+@router.post("/characters/{character_id}/persona-review/chat")
+def chat_persona_review(
+    character_id: str,
+    request: PersonaReviewChatRequest,
+    current_user: UserRecord = Depends(get_current_user),
+) -> dict:
+    return persona_review_service.chat(
+        character_id=character_id,
+        selected_turns=request.selected_turns,
+        message=request.message,
+        history=request.history,
+    )
+
+
+@router.post("/characters/{character_id}/persona-review/finalize")
+def finalize_persona_review(
+    character_id: str,
+    request: PersonaReviewFinalizeRequest,
+    current_user: UserRecord = Depends(get_current_user),
+) -> dict:
+    return persona_review_service.finalize(
+        character_id=character_id,
+        selected_turns=request.selected_turns,
+        history=request.history,
+        limit=request.limit,
+    )
 
 
 @router.post("/characters/{character_id}/persona-review/apply")

@@ -40,6 +40,118 @@ PROTECTED_FIELDS = {
 
 
 class PersonaReviewService:
+    def chat(
+        self,
+        *,
+        character_id: str,
+        selected_turns: List[Any],
+        message: str,
+        history: List[Any],
+    ) -> Dict[str, Any]:
+        character = character_service.get_character(character_id)
+        feedback_summary = database_service.persona_feedback_summary(
+            character_id=character_id,
+            limit=30,
+        )
+        normalized_turns = self._normalize_selected_turns(selected_turns)
+        normalized_history = self._normalize_history(history)
+        prompt = self._build_chat_prompt(
+            character=character,
+            selected_turns=normalized_turns,
+            message=message,
+            history=normalized_history,
+            feedback_summary=feedback_summary,
+        )
+        response = llm_service.generate_json(
+            prompt,
+            (
+                "你是人设编辑 AI，不是聊天角色本人。你只分析角色回复是否符合人设，"
+                "和用户讨论怎么修改 character.json；你不能闲聊，不能假装自己是角色，"
+                "不能声称已经写入文件。你必须只输出严格 JSON。"
+            ),
+        )
+        reply = str(response.get("reply", "")).strip()
+        if not reply:
+            raise HTTPException(
+                status_code=502,
+                detail="Persona editor chat response must include non-empty reply.",
+            )
+        suggested_tags = response.get("suggested_tags", [])
+        if not isinstance(suggested_tags, list):
+            suggested_tags = []
+        updated_history = normalized_history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": reply},
+        ]
+        return {
+            "reply": reply,
+            "history": updated_history,
+            "suggested_tags": [str(tag) for tag in suggested_tags[:12]],
+            "should_generate_final": bool(response.get("should_generate_final", False)),
+        }
+
+    def finalize(
+        self,
+        *,
+        character_id: str,
+        selected_turns: List[Any],
+        history: List[Any],
+        limit: int,
+    ) -> Dict[str, Any]:
+        character = character_service.get_character(character_id)
+        feedback_summary = database_service.persona_feedback_summary(
+            character_id=character_id,
+            limit=limit,
+        )
+        normalized_turns = self._normalize_selected_turns(selected_turns)
+        normalized_history = self._normalize_history(history)
+        if not normalized_turns and not normalized_history and feedback_summary["total_feedback"] == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No selected turns, editor history, or persona feedback available for finalization.",
+            )
+
+        prompt = self._build_finalize_prompt(
+            character=character,
+            selected_turns=normalized_turns,
+            history=normalized_history,
+            feedback_summary=feedback_summary,
+        )
+        review = llm_service.generate_json(
+            prompt,
+            (
+                "你是人设编辑 AI。你只能输出最终修改方案和 preview_character_json，"
+                "不能声称已经写入文件。你必须只输出严格 JSON。"
+            ),
+        )
+        preview = review.get("preview_character_json")
+        if not isinstance(preview, dict):
+            raise HTTPException(
+                status_code=502,
+                detail="Persona finalize JSON must include preview_character_json object.",
+            )
+        current_payload = self._model_to_dict(character)
+        evidence_count = feedback_summary["total_feedback"] + len(normalized_turns) + self._user_history_count(normalized_history)
+        preview = self._sanitize_preview(
+            current_payload=current_payload,
+            preview_payload=preview,
+            feedback_count=evidence_count,
+            review_summary=review,
+        )
+        self._validate_payload(character_id, preview, self._character_path(character_id))
+        changed_fields = [
+            field_name
+            for field_name in sorted(ALLOWED_REVIEW_FIELDS)
+            if current_payload.get(field_name) != preview.get(field_name)
+        ]
+        review["preview_character_json"] = preview
+        review["changed_fields"] = changed_fields
+        review["feedback_stats"] = feedback_summary
+        review["selected_turn_count"] = len(normalized_turns)
+        review["allowed_fields"] = sorted(ALLOWED_REVIEW_FIELDS)
+        review["protected_fields"] = sorted(PROTECTED_FIELDS | {"gptsovits_base_url", "ref_audio_path", "prompt_text"})
+        return review
+
     def summarize(self, character_id: str, limit: int) -> Dict[str, Any]:
         character = character_service.get_character(character_id)
         feedback_summary = database_service.persona_feedback_summary(
@@ -81,6 +193,115 @@ class PersonaReviewService:
         review["allowed_fields"] = sorted(ALLOWED_REVIEW_FIELDS)
         review["protected_fields"] = sorted(PROTECTED_FIELDS | {"gptsovits_base_url", "ref_audio_path", "prompt_text"})
         return review
+
+    def _build_chat_prompt(
+        self,
+        *,
+        character: CharacterCard,
+        selected_turns: List[Dict[str, Any]],
+        message: str,
+        history: List[Dict[str, str]],
+        feedback_summary: Dict[str, Any],
+    ) -> str:
+        character_payload = self._model_to_dict(character)
+        editor_context = {
+            "id": character_payload.get("id"),
+            "display_name": character_payload.get("display_name"),
+            "core_personality": character_payload.get("core_personality"),
+            "speaking_style": character_payload.get("speaking_style"),
+            "forbidden": character_payload.get("forbidden"),
+            "style_contract": character_payload.get("style_contract"),
+            "evaluation_criteria": character_payload.get("evaluation_criteria"),
+            "bad_examples": character_payload.get("bad_examples"),
+        }
+        return f"""你正在和用户进行“人设修改工作台”的多轮讨论。你不是角色本人，而是人设编辑 AI。
+
+任务：
+- 分析选中的角色回复哪里符合或不符合人设。
+- 帮用户把零散评价整理成可修改 character.json 的方向。
+- 不要输出 preview_character_json。
+- 不要声称已经修改文件。
+- 如果信息足够生成最终方案，should_generate_final 可以为 true。
+
+当前角色编辑上下文：
+{json.dumps(editor_context, ensure_ascii=False, indent=2)}
+
+已保存反馈统计：
+{json.dumps(feedback_summary, ensure_ascii=False, indent=2)}
+
+选中的对话：
+{json.dumps(selected_turns, ensure_ascii=False, indent=2)}
+
+已有编辑对话历史：
+{json.dumps(history, ensure_ascii=False, indent=2)}
+
+用户这轮评价：
+{message}
+
+输出 JSON：
+{{
+  "reply": "给用户的人设编辑回复，简洁说明你看到了什么、建议怎么改、还需要用户补充什么",
+  "suggested_tags": ["too_ai", "out_of_character"],
+  "should_generate_final": false
+}}
+"""
+
+    def _build_finalize_prompt(
+        self,
+        *,
+        character: CharacterCard,
+        selected_turns: List[Dict[str, Any]],
+        history: List[Dict[str, str]],
+        feedback_summary: Dict[str, Any],
+    ) -> str:
+        character_payload = self._model_to_dict(character)
+        editable_snapshot = {
+            key: character_payload.get(key)
+            for key in sorted(ALLOWED_REVIEW_FIELDS)
+            if key in character_payload
+        }
+        evidence_count = feedback_summary["total_feedback"] + len(selected_turns) + self._user_history_count(history)
+        sample_policy = (
+            "证据少于 5 条，只允许轻量修改 style_contract、bad_examples、evaluation_criteria、revision_notes。"
+            if evidence_count < 5
+            else "可以根据集中问题谨慎修改允许字段。"
+        )
+        return f"""请根据人设修改工作台的选中对话、用户评价、多轮编辑讨论、已保存反馈统计和当前 character.json，生成最终修改方案。
+
+硬性规则：
+- 只输出 JSON。
+- 不要修改 id、display_name、avatar_url、voice、gptsovits_base_url、ref_audio_path、prompt_text。
+- 优先允许修改 style_contract、speaking_style、forbidden、dialogues、reactions、bad_examples、evaluation_criteria、revision_notes。
+- 不要删除已有有效 dialogues，可以新增更符合人设的 dialogues。
+- 可以新增 bad_examples，但不要把用户评价原文大量塞进 character.json。
+- 不要生成非法 JSON。
+- 不要声称已经写入文件。
+- {sample_policy}
+
+当前完整 character.json：
+{json.dumps(character_payload, ensure_ascii=False, indent=2)}
+
+当前可编辑字段快照：
+{json.dumps(editable_snapshot, ensure_ascii=False, indent=2)}
+
+选中的对话：
+{json.dumps(selected_turns, ensure_ascii=False, indent=2)}
+
+人设编辑对话历史：
+{json.dumps(history, ensure_ascii=False, indent=2)}
+
+已保存反馈统计：
+{json.dumps(feedback_summary, ensure_ascii=False, indent=2)}
+
+输出 JSON：
+{{
+  "main_issues": ["当前角色主要问题"],
+  "revision_plan": ["具体修改计划"],
+  "changed_fields": ["预计修改字段"],
+  "risk_notes": ["风险提示"],
+  "preview_character_json": {{完整 character.json 对象}}
+}}
+"""
 
     def apply(
         self,
@@ -370,6 +591,48 @@ class PersonaReviewService:
                 result.append(item)
                 seen.add(str(item["id"]))
         return result
+
+    def _normalize_selected_turns(self, selected_turns: List[Any]) -> List[Dict[str, Any]]:
+        normalized = []
+        for item in selected_turns[:20]:
+            if hasattr(item, "model_dump"):
+                item = item.model_dump()
+            elif hasattr(item, "dict"):
+                item = item.dict()
+            if not isinstance(item, dict):
+                continue
+            user_message = str(item.get("user_message", "")).strip()
+            assistant_message = str(item.get("assistant_message", "")).strip()
+            if not user_message or not assistant_message:
+                continue
+            normalized.append(
+                {
+                    "turn_id": item.get("turn_id"),
+                    "session_id": item.get("session_id"),
+                    "user_message": user_message,
+                    "assistant_message": assistant_message,
+                }
+            )
+        return normalized
+
+    def _normalize_history(self, history: List[Any]) -> List[Dict[str, str]]:
+        normalized = []
+        for item in history[-40:]:
+            if hasattr(item, "model_dump"):
+                item = item.model_dump()
+            elif hasattr(item, "dict"):
+                item = item.dict()
+            if not isinstance(item, dict):
+                continue
+            role = str(item.get("role", "")).strip()
+            content = str(item.get("content", "")).strip()
+            if role not in {"user", "assistant"} or not content:
+                continue
+            normalized.append({"role": role, "content": content})
+        return normalized
+
+    def _user_history_count(self, history: List[Dict[str, str]]) -> int:
+        return len([item for item in history if item.get("role") == "user"])
 
     def _validate_payload(self, character_id: str, payload: Dict[str, Any], file_path: Path) -> None:
         errors: List[str] = []

@@ -439,6 +439,11 @@ body.user-mode .messages {
   margin: 0 0 18px;
 }
 
+.message-pair.persona-selected .bubble.assistant {
+  border-color: var(--warm);
+  box-shadow: 0 0 0 2px rgba(196, 122, 49, 0.16), var(--shadow);
+}
+
 .message-row {
   display: flex;
   align-items: flex-start;
@@ -533,6 +538,25 @@ body.user-mode .bubble {
   min-height: 16px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.persona-select-button {
+  width: fit-content;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--brand);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.persona-select-button.selected {
+  border-color: rgba(196, 122, 49, 0.45);
+  background: rgba(196, 122, 49, 0.12);
+  color: var(--warm);
 }
 
 .audio-player {
@@ -812,6 +836,88 @@ body.user-mode .composer {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-2);
+}
+
+.selected-persona-turns {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.selected-persona-turn {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(196, 122, 49, 0.35);
+  border-radius: 8px;
+  background: rgba(196, 122, 49, 0.08);
+}
+
+.selected-persona-turn p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.persona-editor-input {
+  width: 100%;
+  min-height: 82px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.persona-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.persona-tag-list button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.persona-editor-chat {
+  display: grid;
+  max-height: 260px;
+  gap: 8px;
+  overflow: auto;
+  margin: 8px 0;
+}
+
+.persona-editor-message {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.persona-editor-message.user {
+  border-color: rgba(45, 125, 179, 0.32);
+  background: rgba(45, 125, 179, 0.07);
+}
+
+.persona-editor-message.assistant {
+  border-color: rgba(35, 107, 91, 0.32);
+  background: rgba(35, 107, 91, 0.07);
+}
+
+.persona-editor-message p {
+  margin: 0;
+  line-height: 1.5;
 }
 
 .persona-review-actions {
