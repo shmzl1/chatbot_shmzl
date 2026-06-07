@@ -1088,6 +1088,56 @@ body.user-mode .composer {
   font-weight: 800;
 }
 
+.compact-button {
+  height: 34px;
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.persona-editor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.persona-editor-drawer {
+  width: min(560px, 100%);
+  height: 100%;
+  overflow: auto;
+  padding: 22px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+  transform: translateX(100%);
+  transition: transform 180ms ease;
+}
+
+.persona-editor-overlay.open .persona-editor-drawer {
+  transform: translateX(0);
+}
+
+.persona-current-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.persona-workbench-section {
+  margin-bottom: 18px;
+}
+
+.persona-workbench-section h3 {
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
 .memory-controls {
   display: grid;
   grid-template-columns: 1fr 64px 64px;
