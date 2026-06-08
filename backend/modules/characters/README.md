@@ -83,7 +83,7 @@ python -m tools.character_pack restore asa_mitaka
 ## 注意事项
 
 - 不允许静默返回默认角色。
-- 不允许 fallback 到 mock。
+- 不允许 mock provider。
 - 写入前必须校验。
 - 删除只能移动到 `.trash`。
 - `role01` 是默认角色，不应被安全删除接口删除。

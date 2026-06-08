@@ -11,7 +11,11 @@ from core.schemas import CandidateReply, CharacterCard
 
 ALLOWED_EMOTIONS = {"neutral", "soft", "angry", "tired", "teasing", "serious"}
 SUPPORTED_PROFILES = {"chat", "persona_editor"}
-SUPPORTED_PROVIDERS = {"auto", "openai", "openai_compatible", "ark"}
+SUPPORTED_PROVIDERS = {"openai"}
+PROFILE_LABELS = {
+    "chat": "聊天模型",
+    "persona_editor": "人设编辑模型",
+}
 
 
 @dataclass(frozen=True)
@@ -26,7 +30,7 @@ class LLMRuntimeConfig:
 
     @property
     def provider_label(self) -> str:
-        return "openai_compatible" if self.provider == "auto" else self.provider
+        return self.provider
 
 
 @dataclass(frozen=True)
@@ -54,10 +58,16 @@ class LLMService:
         prompt: str,
         system_message: str,
         profile: str = "persona_editor",
+        strict_json: bool = False,
     ) -> Dict[str, Any]:
         config = self.runtime_config(profile)
-        raw_text = self._chat_completion(prompt, system_message, config)
-        return self._load_json(raw_text, config)
+        raw_text = self._chat_completion(
+            prompt,
+            system_message,
+            config,
+            strict_json=strict_json,
+        )
+        return self._load_json(raw_text, config, strict_json=strict_json)
 
     def runtime_config(self, profile: str) -> LLMRuntimeConfig:
         try:
@@ -65,10 +75,7 @@ class LLMService:
         except ValueError as exc:
             raise HTTPException(
                 status_code=500,
-                detail=(
-                    f"Unsupported LLM profile '{profile}'. "
-                    f"Supported profiles: {', '.join(sorted(SUPPORTED_PROFILES))}."
-                ),
+                detail=str(exc),
             ) from exc
 
         normalized_profile = str(raw_config["profile"])
@@ -82,18 +89,32 @@ class LLMService:
             )
 
         provider = str(raw_config["provider"] or "").strip().lower()
+        if not provider:
+            missing_labels = raw_config.get("missing_labels", {})
+            raise HTTPException(
+                status_code=500,
+                detail=self._missing_config_detail(
+                    normalized_profile,
+                    [missing_labels.get("provider", "provider")],
+                ),
+            )
+        if provider == "auto":
+            raise HTTPException(
+                status_code=500,
+                detail=f"不允许使用 {raw_config['missing_labels'].get('provider', 'LLM_PROVIDER')}=auto",
+            )
         if provider == "mock":
             raise HTTPException(
                 status_code=500,
-                detail=(
-                    f"LLM provider 'mock' is disabled for profile '{normalized_profile}'. "
-                    "Configure a real OpenAI-compatible API."
-                ),
+                detail=f"不允许使用 mock 作为 {raw_config['missing_labels'].get('provider', 'LLM_PROVIDER')}",
             )
         if provider not in SUPPORTED_PROVIDERS:
             raise HTTPException(
                 status_code=500,
-                detail=f"Unsupported LLM provider '{provider}' for profile '{normalized_profile}'.",
+                detail=(
+                    f"Unsupported LLM provider '{provider}' for profile '{normalized_profile}'. "
+                    "Only 'openai' is allowed."
+                ),
             )
 
         missing = []
@@ -104,13 +125,14 @@ class LLMService:
             missing.append(missing_labels.get("base_url", "base_url"))
         if not raw_config.get("model"):
             missing.append(missing_labels.get("model", "model"))
+        if raw_config.get("timeout_seconds") is None:
+            missing.append(missing_labels.get("timeout_seconds", "timeout_seconds"))
+        if raw_config.get("temperature") is None:
+            missing.append(missing_labels.get("temperature", "temperature"))
         if missing:
             raise HTTPException(
                 status_code=500,
-                detail=(
-                    f"LLM configuration for profile '{normalized_profile}' is incomplete: "
-                    f"{', '.join(missing)} is required."
-                ),
+                detail=self._missing_config_detail(normalized_profile, missing),
             )
 
         return LLMRuntimeConfig(
@@ -124,7 +146,11 @@ class LLMService:
         )
 
     def _generate_with_openai(self, prompt: str, config: LLMRuntimeConfig) -> LLMGeneration:
-        raw_text = self._chat_completion(prompt, "你是角色聊天回复生成器。你必须只输出 JSON。", config)
+        raw_text = self._chat_completion(
+            prompt,
+            "你是角色聊天回复生成器。你必须只输出 JSON。",
+            config,
+        )
         candidates = self._parse_candidates(raw_text, config)
         return LLMGeneration(
             candidates=candidates,
@@ -139,6 +165,7 @@ class LLMService:
         prompt: str,
         system_message: str,
         config: LLMRuntimeConfig,
+        strict_json: bool = False,
     ) -> str:
         try:
             from openai import OpenAI
@@ -156,15 +183,19 @@ class LLMService:
 
         client = OpenAI(**client_kwargs)
 
+        request_kwargs: Dict[str, Any] = {
+            "model": config.model,
+            "temperature": config.temperature,
+            "messages": [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt},
+            ],
+        }
+        if strict_json:
+            request_kwargs["response_format"] = {"type": "json_object"}
+
         try:
-            response = client.chat.completions.create(
-                model=config.model,
-                temperature=config.temperature,
-                messages=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": prompt},
-                ],
-            )
+            response = client.chat.completions.create(**request_kwargs)
         except Exception as exc:
             raise HTTPException(
                 status_code=502,
@@ -177,7 +208,7 @@ class LLMService:
         return response.choices[0].message.content or ""
 
     def _parse_candidates(self, raw_text: str, config: LLMRuntimeConfig) -> List[CandidateReply]:
-        data = self._load_json(raw_text, config)
+        data = self._load_json(raw_text, config, strict_json=False)
         raw_candidates = data.get("candidates")
         if not isinstance(raw_candidates, list) or not raw_candidates:
             raise HTTPException(
@@ -217,23 +248,41 @@ class LLMService:
 
         return candidates
 
-    def _load_json(self, raw_text: str, config: LLMRuntimeConfig) -> Dict[str, Any]:
+    def _load_json(
+        self,
+        raw_text: str,
+        config: LLMRuntimeConfig,
+        strict_json: bool,
+    ) -> Dict[str, Any]:
         text = raw_text.strip()
-        fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
-        if fence_match:
-            text = fence_match.group(1).strip()
-        else:
-            text = self._extract_json_object(text)
+        if not strict_json:
+            fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+            if fence_match:
+                text = fence_match.group(1).strip()
+            else:
+                text = self._extract_json_object(text)
 
         try:
             data = json.loads(text)
         except json.JSONDecodeError as exc:
+            raw_excerpt = self._raw_excerpt(raw_text)
+            if config.profile == "persona_editor":
+                detail = (
+                    f"persona_editor 模型返回非法 JSON; "
+                    f"profile='{config.profile}'; model='{config.model}'; "
+                    f"JSON 解析错误: {exc}; "
+                    f"原始响应前 500 字符: {raw_excerpt}; "
+                    "可以减少选中对话或继续补充更短的评价后重试。"
+                )
+            else:
+                detail = (
+                    f"LLM response for profile '{config.profile}' "
+                    f"with model '{config.model}' is not valid JSON: {exc}; "
+                    f"raw response first 500 chars: {raw_excerpt}"
+                )
             raise HTTPException(
                 status_code=502,
-                detail=(
-                    f"LLM response for profile '{config.profile}' "
-                    f"with model '{config.model}' is not valid JSON: {exc}"
-                ),
+                detail=detail,
             ) from exc
 
         if not isinstance(data, dict):
@@ -253,6 +302,13 @@ class LLMService:
         if start >= 0 and end > start:
             return text[start : end + 1]
         return text
+
+    def _raw_excerpt(self, raw_text: str) -> str:
+        return raw_text.replace("\r", " ").replace("\n", " ")[:500]
+
+    def _missing_config_detail(self, profile: str, fields: List[str]) -> str:
+        profile_label = PROFILE_LABELS.get(profile, profile)
+        return f"缺少{profile_label}配置：{', '.join(fields)}"
 
 
 llm_service = LLMService()

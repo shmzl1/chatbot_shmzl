@@ -28,7 +28,7 @@ class RewriteService:
                 detail=(
                     "LLM reply failed style validation; "
                     "local rewrite cannot safely repair it; "
-                    "no mock fallback is allowed."
+                    "no simulated reply is allowed."
                 ),
             )
 

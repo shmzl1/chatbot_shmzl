@@ -54,7 +54,7 @@ def _optional_env(name: str) -> str | None:
     return value or None
 
 
-def _openai_base_url(name: str = "OPENAI_BASE_URL") -> str | None:
+def _llm_base_url(name: str) -> str | None:
     value = _optional_env(name)
     if not value:
         return None
@@ -84,21 +84,15 @@ class Settings:
     upload_dir: Path = _path_from_env("UPLOAD_DIR", BASE_DIR / "data" / "uploads")
     frontend_dir: Path = _path_from_env("FRONTEND_DIR", PROJECT_ROOT / "frontend" / "simple_web")
     default_character_id: str = os.getenv("DEFAULT_CHARACTER_ID", "role01")
-    llm_provider: str = os.getenv("LLM_PROVIDER", "openai")
-    openai_api_key: str | None = _optional_env("OPENAI_API_KEY")
-    openai_base_url: str | None = _openai_base_url()
-    openai_model: str | None = _optional_env("OPENAI_MODEL")
-    openai_timeout_seconds: float = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "60"))
-    openai_temperature: float = float(os.getenv("OPENAI_TEMPERATURE", "0.8"))
     chat_llm_provider: str | None = _optional_env("CHAT_LLM_PROVIDER")
     chat_openai_api_key: str | None = _optional_env("CHAT_OPENAI_API_KEY")
-    chat_openai_base_url: str | None = _openai_base_url("CHAT_OPENAI_BASE_URL")
+    chat_openai_base_url: str | None = _llm_base_url("CHAT_OPENAI_BASE_URL")
     chat_openai_model: str | None = _optional_env("CHAT_OPENAI_MODEL")
     chat_openai_timeout_seconds: float | None = _optional_float_env("CHAT_OPENAI_TIMEOUT_SECONDS")
     chat_openai_temperature: float | None = _optional_float_env("CHAT_OPENAI_TEMPERATURE")
     persona_editor_llm_provider: str | None = _optional_env("PERSONA_EDITOR_LLM_PROVIDER")
     persona_editor_openai_api_key: str | None = _optional_env("PERSONA_EDITOR_OPENAI_API_KEY")
-    persona_editor_openai_base_url: str | None = _openai_base_url("PERSONA_EDITOR_OPENAI_BASE_URL")
+    persona_editor_openai_base_url: str | None = _llm_base_url("PERSONA_EDITOR_OPENAI_BASE_URL")
     persona_editor_openai_model: str | None = _optional_env("PERSONA_EDITOR_OPENAI_MODEL")
     persona_editor_openai_timeout_seconds: float | None = _optional_float_env("PERSONA_EDITOR_OPENAI_TIMEOUT_SECONDS")
     persona_editor_openai_temperature: float | None = _optional_float_env("PERSONA_EDITOR_OPENAI_TEMPERATURE")
@@ -115,51 +109,47 @@ class Settings:
     avatar_max_size_mb: int = int(os.getenv("AVATAR_MAX_SIZE_MB", "5"))
 
     def get_llm_config(self, profile: str) -> dict:
+        legacy_provider = _optional_env("LLM_PROVIDER")
+        if legacy_provider and legacy_provider.lower() == "auto":
+            raise ValueError("不允许使用 LLM_PROVIDER=auto")
+        if legacy_provider and legacy_provider.lower() == "mock":
+            raise ValueError("不允许使用 mock 作为 LLM_PROVIDER")
+
         if profile == "chat":
             return {
                 "profile": profile,
-                "provider": self.chat_llm_provider or self.llm_provider,
-                "api_key": self.chat_openai_api_key or self.openai_api_key,
-                "base_url": self.chat_openai_base_url or self.openai_base_url,
-                "model": self.chat_openai_model or self.openai_model,
-                "timeout_seconds": (
-                    self.chat_openai_timeout_seconds
-                    if self.chat_openai_timeout_seconds is not None
-                    else self.openai_timeout_seconds
-                ),
-                "temperature": (
-                    self.chat_openai_temperature
-                    if self.chat_openai_temperature is not None
-                    else self.openai_temperature
-                ),
+                "provider": self.chat_llm_provider,
+                "api_key": self.chat_openai_api_key,
+                "base_url": self.chat_openai_base_url,
+                "model": self.chat_openai_model,
+                "timeout_seconds": self.chat_openai_timeout_seconds,
+                "temperature": self.chat_openai_temperature,
                 "missing_labels": {
-                    "api_key": "CHAT_OPENAI_API_KEY or OPENAI_API_KEY",
-                    "base_url": "CHAT_OPENAI_BASE_URL or OPENAI_BASE_URL",
-                    "model": "CHAT_OPENAI_MODEL or OPENAI_MODEL",
+                    "provider": "CHAT_LLM_PROVIDER",
+                    "api_key": "CHAT_OPENAI_API_KEY",
+                    "base_url": "CHAT_OPENAI_BASE_URL",
+                    "model": "CHAT_OPENAI_MODEL",
+                    "timeout_seconds": "CHAT_OPENAI_TIMEOUT_SECONDS",
+                    "temperature": "CHAT_OPENAI_TEMPERATURE",
                 },
             }
 
         if profile == "persona_editor":
             return {
                 "profile": profile,
-                "provider": self.persona_editor_llm_provider or self.llm_provider,
-                "api_key": self.persona_editor_openai_api_key or self.openai_api_key,
-                "base_url": self.persona_editor_openai_base_url or self.openai_base_url,
-                "model": self.persona_editor_openai_model or self.openai_model,
-                "timeout_seconds": (
-                    self.persona_editor_openai_timeout_seconds
-                    if self.persona_editor_openai_timeout_seconds is not None
-                    else self.openai_timeout_seconds
-                ),
-                "temperature": (
-                    self.persona_editor_openai_temperature
-                    if self.persona_editor_openai_temperature is not None
-                    else self.openai_temperature
-                ),
+                "provider": self.persona_editor_llm_provider,
+                "api_key": self.persona_editor_openai_api_key,
+                "base_url": self.persona_editor_openai_base_url,
+                "model": self.persona_editor_openai_model,
+                "timeout_seconds": self.persona_editor_openai_timeout_seconds,
+                "temperature": self.persona_editor_openai_temperature,
                 "missing_labels": {
-                    "api_key": "PERSONA_EDITOR_OPENAI_API_KEY or OPENAI_API_KEY",
-                    "base_url": "PERSONA_EDITOR_OPENAI_BASE_URL or OPENAI_BASE_URL",
-                    "model": "PERSONA_EDITOR_OPENAI_MODEL or OPENAI_MODEL",
+                    "provider": "PERSONA_EDITOR_LLM_PROVIDER",
+                    "api_key": "PERSONA_EDITOR_OPENAI_API_KEY",
+                    "base_url": "PERSONA_EDITOR_OPENAI_BASE_URL",
+                    "model": "PERSONA_EDITOR_OPENAI_MODEL",
+                    "timeout_seconds": "PERSONA_EDITOR_OPENAI_TIMEOUT_SECONDS",
+                    "temperature": "PERSONA_EDITOR_OPENAI_TEMPERATURE",
                 },
             }
 

@@ -103,13 +103,14 @@ class PersonaReviewChatResponse(BaseModel):
 class PersonaReviewFinalizeRequest(BaseModel):
     selected_turns: List[PersonaReviewSelectedTurn] = Field(default_factory=list)
     history: List[PersonaReviewHistoryMessage] = Field(default_factory=list)
-    limit: int = Field(default=30, ge=1, le=100)
+    limit: int = Field(default=20, ge=1, le=50)
 
 
 class PersonaReviewFinalizeResponse(BaseModel):
     main_issues: List[Any] = Field(default_factory=list)
     revision_plan: List[Any] = Field(default_factory=list)
     changed_fields: List[Any] = Field(default_factory=list)
+    patch: Dict[str, Any] = Field(default_factory=dict)
     preview_character_json: Dict[str, Any]
     risk_notes: List[Any] = Field(default_factory=list)
     llm_profile: Optional[str] = None
