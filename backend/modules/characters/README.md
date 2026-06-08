@@ -32,9 +32,8 @@ Optional voice references live under that character's own `voice_refs/`
 directory. Safety backups live under that character's own `backups/`
 directory.
 
-The old `backend/data/character_packs` location is deprecated. It is kept only
-to avoid deleting historical local data. New characters should not be added
-there.
+The old `backend/data/character_packs` location is deprecated and has been
+removed from the project. New characters must not be added there.
 
 The default `role01` character has been migrated to:
 

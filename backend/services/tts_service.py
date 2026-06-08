@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from core.config import settings
 from core.schemas import CharacterCard
-from services.character_service import character_service
+from modules.characters.service import character_service
 
 
 class TTSService:

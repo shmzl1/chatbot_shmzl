@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from core.config import settings
 from core.schemas import ChatRequest, ChatTextRequest, ChatTextResponse, UserRecord
 from services.auth_service import get_current_user
-from services.character_service import character_service
+from modules.characters.service import character_service
 from services.database_service import database_service
 from services.emotion_service import emotion_service
 from services.llm_service import llm_service

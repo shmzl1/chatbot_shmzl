@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Tuple
 from fastapi import HTTPException
 
 from core.config import settings
-from services.character_service import character_service
+from modules.characters.service import character_service
 
 
 RetrievalHit = Dict[str, Any]

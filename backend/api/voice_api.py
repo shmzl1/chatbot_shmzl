@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from core.schemas import VoiceTestRequest, VoiceTestResponse
-from services.character_service import character_service
+from modules.characters.service import character_service
 from services.emotion_service import emotion_service
 from services.tts_service import tts_service
 

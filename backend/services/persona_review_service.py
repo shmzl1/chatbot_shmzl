@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from core.schemas import CharacterCard, CharacterSummary
 from modules.characters import pack_writer
-from services.character_service import character_service
+from modules.characters.service import character_service
 from services.database_service import database_service
 from services.llm_service import llm_service
 

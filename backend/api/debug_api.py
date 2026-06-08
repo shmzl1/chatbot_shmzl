@@ -11,7 +11,7 @@ from core.schemas import (
     UserRecord,
 )
 from services.auth_service import get_current_user
-from services.character_service import character_service
+from modules.characters.service import character_service
 from services.database_service import database_service
 from services.persona_review_service import persona_review_service
 
