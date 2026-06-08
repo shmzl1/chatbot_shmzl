@@ -60,13 +60,16 @@ class PersonaReviewService:
             history=normalized_history,
             feedback_summary=feedback_summary,
         )
+        llm_config = llm_service.runtime_config("persona_editor")
         response = llm_service.generate_json(
             prompt,
             (
                 "你是人设编辑 AI，不是聊天角色本人。你只分析角色回复是否符合人设，"
                 "和用户讨论怎么修改 character.json；你不能闲聊，不能假装自己是角色，"
+                "只能分析、讨论、生成方案；未经用户确认不能写 character.json，"
                 "不能声称已经写入文件。你必须只输出严格 JSON。"
             ),
+            profile="persona_editor",
         )
         reply = str(response.get("reply", "")).strip()
         if not reply:
@@ -86,6 +89,8 @@ class PersonaReviewService:
             "history": updated_history,
             "suggested_tags": [str(tag) for tag in suggested_tags[:12]],
             "should_generate_final": bool(response.get("should_generate_final", False)),
+            "llm_profile": llm_config.profile,
+            "model": llm_config.model,
         }
 
     def finalize(
@@ -115,12 +120,15 @@ class PersonaReviewService:
             history=normalized_history,
             feedback_summary=feedback_summary,
         )
+        llm_config = llm_service.runtime_config("persona_editor")
         review = llm_service.generate_json(
             prompt,
             (
-                "你是人设编辑 AI。你只能输出最终修改方案和 preview_character_json，"
+                "你是人设编辑 AI，不是聊天角色本人。你只分析、讨论、生成方案。"
+                "你只能输出最终修改方案和 preview_character_json；未经用户确认不能写 character.json，"
                 "不能声称已经写入文件。你必须只输出严格 JSON。"
             ),
+            profile="persona_editor",
         )
         preview = review.get("preview_character_json")
         if not isinstance(preview, dict):
@@ -148,6 +156,8 @@ class PersonaReviewService:
         review["selected_turn_count"] = len(normalized_turns)
         review["allowed_fields"] = sorted(ALLOWED_REVIEW_FIELDS)
         review["protected_fields"] = sorted(PROTECTED_FIELDS | {"gptsovits_base_url", "ref_audio_path", "prompt_text"})
+        review["llm_profile"] = llm_config.profile
+        review["model"] = llm_config.model
         return review
 
     def summarize(self, character_id: str, limit: int) -> Dict[str, Any]:
@@ -164,9 +174,15 @@ class PersonaReviewService:
             )
 
         prompt = self._build_summary_prompt(character, feedback_summary)
+        llm_config = llm_service.runtime_config("persona_editor")
         review = llm_service.generate_json(
             prompt,
-            "你是角色人设编辑器。你必须只输出严格 JSON，且只能生成修改建议和预览，不得声称已经写入文件。",
+            (
+                "你是人设编辑 AI，不是聊天角色本人。你只分析、讨论、生成方案。"
+                "你必须只输出严格 JSON，且只能生成修改建议和预览；"
+                "未经用户确认不能写 character.json，不得声称已经写入文件。"
+            ),
+            profile="persona_editor",
         )
         preview = review.get("preview_character_json")
         if not isinstance(preview, dict):
@@ -190,6 +206,8 @@ class PersonaReviewService:
         )
         review["allowed_fields"] = sorted(ALLOWED_REVIEW_FIELDS)
         review["protected_fields"] = sorted(PROTECTED_FIELDS | {"gptsovits_base_url", "ref_audio_path", "prompt_text"})
+        review["llm_profile"] = llm_config.profile
+        review["model"] = llm_config.model
         return review
 
     def _build_chat_prompt(

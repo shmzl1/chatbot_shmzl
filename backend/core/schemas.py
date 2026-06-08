@@ -96,6 +96,8 @@ class PersonaReviewChatResponse(BaseModel):
     history: List[PersonaReviewHistoryMessage] = Field(default_factory=list)
     suggested_tags: List[str] = Field(default_factory=list)
     should_generate_final: bool = False
+    llm_profile: Optional[str] = None
+    model: Optional[str] = None
 
 
 class PersonaReviewFinalizeRequest(BaseModel):
@@ -110,6 +112,8 @@ class PersonaReviewFinalizeResponse(BaseModel):
     changed_fields: List[Any] = Field(default_factory=list)
     preview_character_json: Dict[str, Any]
     risk_notes: List[Any] = Field(default_factory=list)
+    llm_profile: Optional[str] = None
+    model: Optional[str] = None
 
 
 class PersonaReviewApplyRequest(BaseModel):

@@ -85,13 +85,13 @@ class TTSService:
 
         pack_voice_dir = character_service.pack_dir(character.id) / "voice_refs"
         emotion_dir = pack_voice_dir / emotion
-        fallback_dir = pack_voice_dir / "neutral"
+        neutral_dir = pack_voice_dir / "neutral"
 
         ref_audio_path = emotion_dir / "ref_001.wav"
         ref_text_path = emotion_dir / "ref_001.txt"
         if not ref_audio_path.exists() and emotion != "neutral":
-            ref_audio_path = fallback_dir / "ref_001.wav"
-            ref_text_path = fallback_dir / "ref_001.txt"
+            ref_audio_path = neutral_dir / "ref_001.wav"
+            ref_text_path = neutral_dir / "ref_001.txt"
 
         if not ref_audio_path.exists():
             raise HTTPException(

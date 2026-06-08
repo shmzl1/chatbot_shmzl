@@ -25,7 +25,11 @@ class RewriteService:
         if self._still_weak(rewritten):
             raise HTTPException(
                 status_code=502,
-                detail="LLM reply failed style validation and cannot be rewritten locally without mock fallback.",
+                detail=(
+                    "LLM reply failed style validation; "
+                    "local rewrite cannot safely repair it; "
+                    "no mock fallback is allowed."
+                ),
             )
 
         return rewritten, rewritten != reply

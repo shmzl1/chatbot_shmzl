@@ -126,6 +126,56 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 前端是 `frontend/simple_web` 下的简单网页。
 也可以使用项目根目录的 `run_app.bat` 或 `run_app.ps1` 辅助启动。
 
+## LLM 模型配置
+
+普通聊天和人设编辑现在使用两套模型配置。
+
+普通聊天使用 `CHAT_*` 配置：
+
+```env
+CHAT_LLM_PROVIDER="openai"
+CHAT_OPENAI_API_KEY="your_api_key_here"
+CHAT_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
+CHAT_OPENAI_MODEL="your_chat_model_here"
+CHAT_OPENAI_TIMEOUT_SECONDS="60"
+CHAT_OPENAI_TEMPERATURE="0.8"
+```
+
+人设编辑使用 `PERSONA_EDITOR_*` 配置：
+
+```env
+PERSONA_EDITOR_LLM_PROVIDER="openai"
+PERSONA_EDITOR_OPENAI_API_KEY="your_api_key_here"
+PERSONA_EDITOR_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
+PERSONA_EDITOR_OPENAI_MODEL="your_persona_editor_model_here"
+PERSONA_EDITOR_OPENAI_TIMEOUT_SECONDS="60"
+PERSONA_EDITOR_OPENAI_TEMPERATURE="0.3"
+```
+
+这样可以让普通聊天模型更偏角色表达和人设还原，
+让人设编辑模型更偏分析、稳定输出 JSON 和生成修改方案。
+
+两套配置可以使用同一个 API Key，也可以指向不同模型。
+
+如果新配置没有填写，系统会按兼容策略读取旧 `OPENAI_*` 配置。
+如果最终有效配置仍缺少 API Key、Base URL 或 Model，接口会直接报错。
+
+不允许使用 `LLM_PROVIDER=mock`。
+
+## 无静默兜底策略
+
+本项目不在关键错误后生成模拟结果。
+
+- LLM 配置错误会直接报错。
+- LLM 请求失败会直接报错。
+- LLM 返回 JSON 解析失败会直接报错。
+- 角色 JSON 错误会直接报错。
+- 人设编辑 JSON 解析失败会直接报错。
+- GPT-SoVITS 语音失败会直接报错。
+- 项目不会在模型失败时返回模拟角色回复。
+
+这样做是为了本地调试时尽快暴露真实问题。
+
 ## 人物包 CLI
 
 进入后端目录：

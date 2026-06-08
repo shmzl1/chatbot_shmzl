@@ -54,8 +54,8 @@ def _optional_env(name: str) -> str | None:
     return value or None
 
 
-def _openai_base_url() -> str | None:
-    value = _optional_env("OPENAI_BASE_URL")
+def _openai_base_url(name: str = "OPENAI_BASE_URL") -> str | None:
+    value = _optional_env(name)
     if not value:
         return None
 
@@ -67,9 +67,16 @@ def _openai_base_url() -> str | None:
     return value
 
 
+def _optional_float_env(name: str) -> float | None:
+    value = _optional_env(name)
+    if value is None:
+        return None
+    return float(value)
+
+
 @dataclass(frozen=True)
 class Settings:
-    app_name: str = os.getenv("APP_NAME", "Local Role Voice Chatbot")
+    app_name: str = os.getenv("APP_NAME", "虚拟人物陪伴系统")
     app_version: str = os.getenv("APP_VERSION", "0.1.0")
     data_dir: Path = _data_dir()
     database_url: str = _database_url()
@@ -83,6 +90,18 @@ class Settings:
     openai_model: str | None = _optional_env("OPENAI_MODEL")
     openai_timeout_seconds: float = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "60"))
     openai_temperature: float = float(os.getenv("OPENAI_TEMPERATURE", "0.8"))
+    chat_llm_provider: str | None = _optional_env("CHAT_LLM_PROVIDER")
+    chat_openai_api_key: str | None = _optional_env("CHAT_OPENAI_API_KEY")
+    chat_openai_base_url: str | None = _openai_base_url("CHAT_OPENAI_BASE_URL")
+    chat_openai_model: str | None = _optional_env("CHAT_OPENAI_MODEL")
+    chat_openai_timeout_seconds: float | None = _optional_float_env("CHAT_OPENAI_TIMEOUT_SECONDS")
+    chat_openai_temperature: float | None = _optional_float_env("CHAT_OPENAI_TEMPERATURE")
+    persona_editor_llm_provider: str | None = _optional_env("PERSONA_EDITOR_LLM_PROVIDER")
+    persona_editor_openai_api_key: str | None = _optional_env("PERSONA_EDITOR_OPENAI_API_KEY")
+    persona_editor_openai_base_url: str | None = _openai_base_url("PERSONA_EDITOR_OPENAI_BASE_URL")
+    persona_editor_openai_model: str | None = _optional_env("PERSONA_EDITOR_OPENAI_MODEL")
+    persona_editor_openai_timeout_seconds: float | None = _optional_float_env("PERSONA_EDITOR_OPENAI_TIMEOUT_SECONDS")
+    persona_editor_openai_temperature: float | None = _optional_float_env("PERSONA_EDITOR_OPENAI_TEMPERATURE")
     debug_prompt: bool = os.getenv("DEBUG_PROMPT", "false").lower() == "true"
     top_k_lore: int = int(os.getenv("TOP_K_LORE", "5"))
     top_k_dialogue: int = int(os.getenv("TOP_K_DIALOGUE", "5"))
@@ -94,6 +113,57 @@ class Settings:
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "change_me_dev_jwt_secret")
     jwt_expire_minutes: int = int(os.getenv("JWT_EXPIRE_MINUTES", "10080"))
     avatar_max_size_mb: int = int(os.getenv("AVATAR_MAX_SIZE_MB", "5"))
+
+    def get_llm_config(self, profile: str) -> dict:
+        if profile == "chat":
+            return {
+                "profile": profile,
+                "provider": self.chat_llm_provider or self.llm_provider,
+                "api_key": self.chat_openai_api_key or self.openai_api_key,
+                "base_url": self.chat_openai_base_url or self.openai_base_url,
+                "model": self.chat_openai_model or self.openai_model,
+                "timeout_seconds": (
+                    self.chat_openai_timeout_seconds
+                    if self.chat_openai_timeout_seconds is not None
+                    else self.openai_timeout_seconds
+                ),
+                "temperature": (
+                    self.chat_openai_temperature
+                    if self.chat_openai_temperature is not None
+                    else self.openai_temperature
+                ),
+                "missing_labels": {
+                    "api_key": "CHAT_OPENAI_API_KEY or OPENAI_API_KEY",
+                    "base_url": "CHAT_OPENAI_BASE_URL or OPENAI_BASE_URL",
+                    "model": "CHAT_OPENAI_MODEL or OPENAI_MODEL",
+                },
+            }
+
+        if profile == "persona_editor":
+            return {
+                "profile": profile,
+                "provider": self.persona_editor_llm_provider or self.llm_provider,
+                "api_key": self.persona_editor_openai_api_key or self.openai_api_key,
+                "base_url": self.persona_editor_openai_base_url or self.openai_base_url,
+                "model": self.persona_editor_openai_model or self.openai_model,
+                "timeout_seconds": (
+                    self.persona_editor_openai_timeout_seconds
+                    if self.persona_editor_openai_timeout_seconds is not None
+                    else self.openai_timeout_seconds
+                ),
+                "temperature": (
+                    self.persona_editor_openai_temperature
+                    if self.persona_editor_openai_temperature is not None
+                    else self.openai_temperature
+                ),
+                "missing_labels": {
+                    "api_key": "PERSONA_EDITOR_OPENAI_API_KEY or OPENAI_API_KEY",
+                    "base_url": "PERSONA_EDITOR_OPENAI_BASE_URL or OPENAI_BASE_URL",
+                    "model": "PERSONA_EDITOR_OPENAI_MODEL or OPENAI_MODEL",
+                },
+            }
+
+        raise ValueError(f"Unsupported LLM profile '{profile}'.")
 
 
 settings = Settings()

@@ -70,7 +70,12 @@ def _run_chat(request: ChatTextRequest, voice: bool) -> ChatTextResponse:
     retrieval_context["memories"] = memory_hits
     retrieval_context["history"] = history
     prompt = build_chat_prompt(character, request.message, retrieval_context)
-    generation = llm_service.generate_candidates(prompt, character, request.message)
+    generation = llm_service.generate_candidates(
+        prompt,
+        character,
+        request.message,
+        profile="chat",
+    )
     judge_result = style_judge_service.judge(
         character=character,
         candidates=generation.candidates,
@@ -109,6 +114,7 @@ def _run_chat(request: ChatTextRequest, voice: bool) -> ChatTextResponse:
 
     debug = {
         "character_id": character.id,
+        "llm_profile": generation.profile,
         "mode": generation.provider,
         "model": generation.model,
         "voice": voice,

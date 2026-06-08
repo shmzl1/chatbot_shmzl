@@ -27,9 +27,29 @@ rollback  恢复上一版备份
 
 不要在本模块中重新拼接人物包路径。
 
+## LLM profile
+
+人设编辑使用 `persona_editor` profile。
+
+配置项为：
+
+- `PERSONA_EDITOR_LLM_PROVIDER`
+- `PERSONA_EDITOR_OPENAI_API_KEY`
+- `PERSONA_EDITOR_OPENAI_BASE_URL`
+- `PERSONA_EDITOR_OPENAI_MODEL`
+- `PERSONA_EDITOR_OPENAI_TIMEOUT_SECONDS`
+- `PERSONA_EDITOR_OPENAI_TEMPERATURE`
+
+如果这些配置未填写，系统会兼容读取旧 `OPENAI_*` 配置。
+如果最终有效配置仍缺失，人设编辑接口会直接报错。
+
+人设编辑 AI 不是当前角色本人。
+它只分析、讨论和生成方案，未经用户确认不能写入 `character.json`。
+
 ## 注意事项
 
 - 不要让 `chat` 或 `finalize` 写入角色包。
 - 不要绕过角色包校验。
 - 不要修改受保护字段。
+- 不要使用普通聊天模型配置做人设编辑。
 - LLM 失败时返回明确错误。

@@ -10,6 +10,23 @@ from core.schemas import CandidateReply, CharacterCard
 
 
 ALLOWED_EMOTIONS = {"neutral", "soft", "angry", "tired", "teasing", "serious"}
+SUPPORTED_PROFILES = {"chat", "persona_editor"}
+SUPPORTED_PROVIDERS = {"auto", "openai", "openai_compatible", "ark"}
+
+
+@dataclass(frozen=True)
+class LLMRuntimeConfig:
+    profile: str
+    provider: str
+    api_key: str
+    base_url: str
+    model: str
+    timeout_seconds: float
+    temperature: float
+
+    @property
+    def provider_label(self) -> str:
+        return "openai_compatible" if self.provider == "auto" else self.provider
 
 
 @dataclass(frozen=True)
@@ -17,6 +34,7 @@ class LLMGeneration:
     candidates: List[CandidateReply]
     provider: str
     model: str | None
+    profile: str
     raw_text: str | None = None
 
 
@@ -26,52 +44,102 @@ class LLMService:
         prompt: str,
         character: CharacterCard,
         user_message: str,
+        profile: str = "chat",
     ) -> LLMGeneration:
-        self._validate_llm_settings()
-        return self._generate_with_openai(prompt)
+        config = self.runtime_config(profile)
+        return self._generate_with_openai(prompt, config)
 
-    def generate_json(self, prompt: str, system_message: str) -> Dict[str, Any]:
-        self._validate_llm_settings()
-        raw_text = self._chat_completion(prompt, system_message)
-        return self._load_json(raw_text)
+    def generate_json(
+        self,
+        prompt: str,
+        system_message: str,
+        profile: str = "persona_editor",
+    ) -> Dict[str, Any]:
+        config = self.runtime_config(profile)
+        raw_text = self._chat_completion(prompt, system_message, config)
+        return self._load_json(raw_text, config)
 
-    def _validate_llm_settings(self) -> None:
-        provider = settings.llm_provider.lower()
+    def runtime_config(self, profile: str) -> LLMRuntimeConfig:
+        try:
+            raw_config = settings.get_llm_config(profile)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Unsupported LLM profile '{profile}'. "
+                    f"Supported profiles: {', '.join(sorted(SUPPORTED_PROFILES))}."
+                ),
+            ) from exc
+
+        normalized_profile = str(raw_config["profile"])
+        if normalized_profile not in SUPPORTED_PROFILES:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Unsupported LLM profile '{normalized_profile}'. "
+                    f"Supported profiles: {', '.join(sorted(SUPPORTED_PROFILES))}."
+                ),
+            )
+
+        provider = str(raw_config["provider"] or "").strip().lower()
         if provider == "mock":
             raise HTTPException(
                 status_code=500,
-                detail="LLM_PROVIDER=mock is disabled. Configure a real OpenAI-compatible API.",
+                detail=(
+                    f"LLM provider 'mock' is disabled for profile '{normalized_profile}'. "
+                    "Configure a real OpenAI-compatible API."
+                ),
             )
-        if provider not in {"auto", "openai", "openai_compatible", "ark"}:
+        if provider not in SUPPORTED_PROVIDERS:
             raise HTTPException(
                 status_code=500,
-                detail=f"Unsupported LLM_PROVIDER '{settings.llm_provider}'.",
+                detail=f"Unsupported LLM provider '{provider}' for profile '{normalized_profile}'.",
             )
 
         missing = []
-        if not settings.openai_api_key:
-            missing.append("OPENAI_API_KEY")
-        if not settings.openai_model:
-            missing.append("OPENAI_MODEL")
-        if not settings.openai_base_url:
-            missing.append("OPENAI_BASE_URL")
+        missing_labels = raw_config.get("missing_labels", {})
+        if not raw_config.get("api_key"):
+            missing.append(missing_labels.get("api_key", "api_key"))
+        if not raw_config.get("base_url"):
+            missing.append(missing_labels.get("base_url", "base_url"))
+        if not raw_config.get("model"):
+            missing.append(missing_labels.get("model", "model"))
         if missing:
             raise HTTPException(
                 status_code=500,
-                detail=f"LLM configuration is incomplete: {', '.join(missing)} is required.",
+                detail=(
+                    f"LLM configuration for profile '{normalized_profile}' is incomplete: "
+                    f"{', '.join(missing)} is required."
+                ),
             )
 
-    def _generate_with_openai(self, prompt: str) -> LLMGeneration:
-        raw_text = self._chat_completion(prompt, "你是角色聊天回复生成器。你必须只输出 JSON。")
-        candidates = self._parse_candidates(raw_text)
+        return LLMRuntimeConfig(
+            profile=normalized_profile,
+            provider=provider,
+            api_key=str(raw_config["api_key"]),
+            base_url=str(raw_config["base_url"]),
+            model=str(raw_config["model"]),
+            timeout_seconds=float(raw_config["timeout_seconds"]),
+            temperature=float(raw_config["temperature"]),
+        )
+
+    def _generate_with_openai(self, prompt: str, config: LLMRuntimeConfig) -> LLMGeneration:
+        raw_text = self._chat_completion(prompt, "你是角色聊天回复生成器。你必须只输出 JSON。", config)
+        candidates = self._parse_candidates(raw_text, config)
         return LLMGeneration(
             candidates=candidates,
-            provider=provider_label(),
-            model=settings.openai_model,
+            provider=config.provider_label,
+            model=config.model,
+            profile=config.profile,
             raw_text=raw_text,
         )
 
-    def _chat_completion(self, prompt: str, system_message: str) -> str:
+    def _chat_completion(
+        self,
+        prompt: str,
+        system_message: str,
+        config: LLMRuntimeConfig,
+    ) -> str:
         try:
             from openai import OpenAI
         except ImportError as exc:
@@ -81,18 +149,17 @@ class LLMService:
             ) from exc
 
         client_kwargs: Dict[str, Any] = {
-            "api_key": settings.openai_api_key,
-            "timeout": settings.openai_timeout_seconds,
+            "api_key": config.api_key,
+            "timeout": config.timeout_seconds,
         }
-        if settings.openai_base_url:
-            client_kwargs["base_url"] = settings.openai_base_url
+        client_kwargs["base_url"] = config.base_url
 
         client = OpenAI(**client_kwargs)
 
         try:
             response = client.chat.completions.create(
-                model=settings.openai_model,
-                temperature=settings.openai_temperature,
+                model=config.model,
+                temperature=config.temperature,
                 messages=[
                     {"role": "system", "content": system_message},
                     {"role": "user", "content": prompt},
@@ -101,13 +168,16 @@ class LLMService:
         except Exception as exc:
             raise HTTPException(
                 status_code=502,
-                detail=f"LLM request failed: {exc}",
+                detail=(
+                    f"LLM request failed for profile '{config.profile}' "
+                    f"with model '{config.model}': {exc}"
+                ),
             ) from exc
 
         return response.choices[0].message.content or ""
 
-    def _parse_candidates(self, raw_text: str) -> List[CandidateReply]:
-        data = self._load_json(raw_text)
+    def _parse_candidates(self, raw_text: str, config: LLMRuntimeConfig) -> List[CandidateReply]:
+        data = self._load_json(raw_text, config)
         raw_candidates = data.get("candidates")
         if not isinstance(raw_candidates, list) or not raw_candidates:
             raise HTTPException(
@@ -147,7 +217,7 @@ class LLMService:
 
         return candidates
 
-    def _load_json(self, raw_text: str) -> Dict[str, Any]:
+    def _load_json(self, raw_text: str, config: LLMRuntimeConfig) -> Dict[str, Any]:
         text = raw_text.strip()
         fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
         if fence_match:
@@ -160,7 +230,10 @@ class LLMService:
         except json.JSONDecodeError as exc:
             raise HTTPException(
                 status_code=502,
-                detail=f"LLM response is not valid JSON: {exc}",
+                detail=(
+                    f"LLM response for profile '{config.profile}' "
+                    f"with model '{config.model}' is not valid JSON: {exc}"
+                ),
             ) from exc
 
         if not isinstance(data, dict):
@@ -182,9 +255,8 @@ class LLMService:
         return text
 
 
-def provider_label() -> str:
-    provider = settings.llm_provider.lower()
-    return "openai_compatible" if provider == "auto" else provider
-
-
 llm_service = LLMService()
+
+
+def provider_label(profile: str = "chat") -> str:
+    return llm_service.runtime_config(profile).provider_label

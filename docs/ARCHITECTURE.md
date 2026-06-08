@@ -77,7 +77,7 @@ packs/{character_id}/
 前端
   -> chat API
   -> characters 模块读取角色
-  -> retrieval / memory / LLM
+  -> retrieval / memory / chat LLM profile
   -> 保存聊天记录
   -> 返回文本和可选语音
 ```
@@ -88,10 +88,28 @@ packs/{character_id}/
 选中聊天片段
   -> persona-review/chat
   -> persona-review/finalize
+  -> persona_editor LLM profile
   -> 生成 preview_character_json
   -> persona-review/apply
   -> characters 模块校验并写入角色包
 ```
+
+## LLM 配置
+
+LLM 底层继续使用 OpenAI-compatible client。
+
+普通聊天和人设编辑使用不同 profile：
+
+- `chat`：读取 `CHAT_*` 配置。
+- `persona_editor`：读取 `PERSONA_EDITOR_*` 配置。
+
+如果新配置没有填写，系统会兼容读取旧 `OPENAI_*` 配置。
+
+如果最终有效配置缺少 API Key、Base URL 或 Model，
+接口会直接返回明确错误。
+
+不允许使用 `LLM_PROVIDER=mock`。
+模型失败后不会返回模拟角色回复。
 
 ## 数据库存储
 

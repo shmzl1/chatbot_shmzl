@@ -12,6 +12,23 @@
 - 不提交 Git。
 - 不启动长期运行的服务，除非用户明确要求。
 
+## LLM 配置边界
+
+普通聊天使用 `chat` profile。
+
+人设编辑使用 `persona_editor` profile。
+
+两套 profile 分别读取：
+
+- `CHAT_*`
+- `PERSONA_EDITOR_*`
+
+旧 `OPENAI_*` 只作为兼容配置。
+缺少最终有效配置时应直接报错。
+
+不要把 `mock` 作为 provider。
+不要在 LLM 失败后生成模拟角色回复。
+
 ## 人物系统边界
 
 人物相关功能集中在：
@@ -74,4 +91,6 @@ python -m compileall .
 - 不删除数据库、聊天记录、记忆和知识库。
 - 不永久删除角色包。
 - 不绕过 `.trash` 删除人物。
+- 不启用 `LLM_PROVIDER=mock`。
+- 不吞掉 LLM 请求或 JSON 解析错误。
 - 不把官方素材、语音和模型权重提交到 Git。
