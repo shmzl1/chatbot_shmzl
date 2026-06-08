@@ -2,83 +2,76 @@
 
 ## 项目简介
 
-这是一个本地运行的虚拟人物陪伴系统。用户可以选择不同虚拟人物进行对话，并通过人设编辑工作台持续调整人物表达。系统目标不是做一个简单问答机器人，而是让同一个角色在不同场景中延续对用户的理解。
+这是一个本地运行的虚拟人物陪伴系统。
 
-当前重点是角色聊天、人物包管理、人设反馈和本地单用户使用体验。后续预留日程管理、日记阅读和共享关系记忆等场景，但这些业务目前尚未完整实现。
+项目重点不是做普通问答机器人，而是围绕“人物”建立长期对话体验：
+用户可以选择不同虚拟人物聊天，也可以通过人设编辑工作台持续修正人物表达。
 
-## 主要功能
+当前版本以本地单用户使用为主，默认角色是 `role01`。
+系统已经把人物相关能力集中到 `backend/modules/characters` 模块。
 
-- 本地单用户登录锁。
-- 角色聊天，聊天记录保存到 PostgreSQL。
-- 多人物角色包管理。
+## 当前功能
+
+- 本地单用户登录保护。
+- 角色聊天和聊天记录保存。
+- 多人物角色包读取、创建、更新、删除、恢复。
 - 角色头像上传。
 - 人设编辑工作台。
-- 逐条评价角色回复是否符合人设。
-- 发送给人设编辑 AI 进行多轮讨论。
-- AI 生成最终人设修改方案和 `preview_character_json`。
-- 用户确认后才写入 `character.json`。
-- 上一版人设备份与回滚。
-- PostgreSQL 保存聊天、记忆、知识库、反馈和本地用户数据。
-- Docker Compose 启动 PostgreSQL 和 Adminer。
-- 可选 GPT-SoVITS 语音接口。
-- 未来预留：日程管理、日记系统、共享关系记忆。
+- 对角色回复进行逐条评价。
+- 与人设编辑 AI 多轮讨论修改方向。
+- 生成最终人设修改方案和 `preview_character_json`。
+- 用户确认后才写入角色 `character.json`。
+- 人设修改前自动备份上一版。
+- 支持上一版人设回滚。
+- PostgreSQL 保存聊天、记忆、知识库、反馈等数据。
+- Docker Compose 提供 PostgreSQL 和 Adminer。
+- 可选接入 GPT-SoVITS 语音服务。
 
-## 最新项目结构
+日程、日记和更完整的共享关系记忆仍属于后续规划。
+
+## 最新结构
 
 ```text
 chatbot/
   backend/
     main.py
-    api/                         旧 API 兼容层逐步清理中
-    core/                        配置、通用 schema、安全工具
+    core/                         通用配置、schema、安全工具
+    api/                          旧 API 兼容层和少量入口
     modules/
-      auth/
-      chat/
-      characters/
-        api.py
-        service.py
-        repository.py
-        schemas.py
-        pack_loader.py
-        pack_writer.py
-        validator.py
-        templates/
-          default_character.json
-        packs/
-          role01/
-            character.json
-            voice_refs/
-              neutral/
-                .gitkeep
-            backups/
-              .gitkeep
-          .trash/
-            .gitkeep
-      persona_review/
-      memory/
-      knowledge/
-      voice/
-      relationship_memory/
-      schedule/
-      diary/
-      debug/
-    database/
-      migrations/
-    services/                    非人物系统的旧服务逐步迁移中
+      auth/                       登录模块
+      chat/                       普通聊天模块
+      characters/                 人物系统核心模块
+      persona_review/             人设编辑模块
+      memory/                     记忆模块
+      knowledge/                  知识库模块
+      voice/                      语音模块
+      relationship_memory/        共享关系记忆预留模块
+      schedule/                   日程预留模块
+      diary/                      日记预留模块
+      debug/                      调试接口模块
+    services/                     仍在逐步迁移的旧服务
+    database/                     数据库和迁移脚本
     tools/
-      character_pack.py
-    outputs/
-    requirements.txt
+      character_pack.py           人物包 CLI
+    outputs/                      本地输出目录
   frontend/
-    simple_web/
+    simple_web/                   当前简单网页前端
+  docs/                           架构和 Codex 协作文档
   docker-compose.yml
   run_app.bat
   run_app.ps1
   暂时暂停Chatbot.bat
   彻底停止Chatbot.bat
+  计划书.md
 ```
 
-人物系统统一在 `backend/modules/characters`。
+## 人物系统路径
+
+人物系统现在集中在：
+
+```text
+backend/modules/characters/
+```
 
 公共模板在：
 
@@ -86,193 +79,71 @@ chatbot/
 backend/modules/characters/templates/
 ```
 
-每个角色一个目录：
+每个角色一个独立目录：
 
 ```text
 backend/modules/characters/packs/{character_id}/
 ```
 
-角色数据唯一来源是：
+默认角色已经迁移到：
 
 ```text
-backend/modules/characters/packs/{character_id}/character.json
+backend/modules/characters/packs/role01/
 ```
 
-旧目录 `backend/data/character_packs` 已废弃并删除。不要再把新角色放回旧目录。
+每个角色包里，唯一必需文件是 `character.json`。
+角色语音参考素材放在本角色目录的 `voice_refs/`。
+人设上一版备份放在本角色目录的 `backups/`。
 
-`schedule` 和 `diary` 目前只是预留模块，尚未实现完整业务。
+旧目录 `backend/data/character_packs` 已废弃。
+新增角色不要再放到旧目录，也不要让新代码恢复旧路径依赖。
 
-## 环境准备
+## 启动方式
 
-需要：
-
-- Windows
-- Docker Desktop
-- Conda 环境 `3-chatbot`
-- Python 依赖来自 `backend/requirements.txt`
-- 本地 `backend/.env`
-- 可选 GPT-SoVITS API
-
-## 后端 .env
-
-首次运行前可以复制示例：
-
-```powershell
-copy .env.example backend\.env
-```
-
-`backend/.env` 至少需要关注：
-
-```text
-DATABASE_URL="postgresql://chatbot:change_me_local_only@127.0.0.1:5432/role_chatbot"
-LLM_PROVIDER="openai"
-OPENAI_API_KEY="your_api_key_here"
-OPENAI_BASE_URL="https://your-openai-compatible-base-url.example.com"
-OPENAI_MODEL="your_model_name_here"
-JWT_SECRET_KEY="change_this_to_a_long_random_string"
-JWT_EXPIRE_MINUTES="10080"
-UPLOAD_DIR="./data/uploads"
-AVATAR_MAX_SIZE_MB="5"
-GPTSOVITS_BASE_URL="http://127.0.0.1:9880"
-```
-
-不要提交真实 API Key、数据库密码、JWT 密钥或本地私有配置。
-
-## 手动启动
-
-终端 1：
-
-```powershell
-cd E:\my_software\chatbot
-docker compose up -d
-```
-
-终端 2：
+首次使用前，建议创建后端环境并安装依赖：
 
 ```powershell
 cd E:\my_software\chatbot\backend
 conda activate 3-chatbot
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
+```
+
+启动数据库：
+
+```powershell
+cd E:\my_software\chatbot
+docker compose up -d postgres adminer
+```
+
+启动后端：
+
+```powershell
+cd E:\my_software\chatbot\backend
+conda activate 3-chatbot
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-浏览器访问：
+前端是 `frontend/simple_web` 下的简单网页。
+也可以使用项目根目录的 `run_app.bat` 或 `run_app.ps1` 辅助启动。
 
-```text
-http://127.0.0.1:8000/app/
-```
+## 人物包 CLI
 
-Adminer：
-
-```text
-http://127.0.0.1:8081
-```
-
-可选 GPT-SoVITS API 单独启动：
-
-```powershell
-cd E:\GPT-SoVITS\GPT-SoVITS-v2pro-20250604
-runtime\python.exe -I api_v2.py -a 127.0.0.1 -p 9880 -c GPT_SoVITS\configs\tts_infer.yaml
-```
-
-GPT-SoVITS 不是默认自动启动项。不开语音时，文字聊天仍可使用。
-
-## 一键启动脚本
-
-入口：
-
-```text
-E:\my_software\chatbot\run_app.bat
-E:\my_software\chatbot\run_app.ps1
-```
-
-说明：
-
-- `run_app.bat` 是双击入口。
-- `run_app.bat` 调用同目录的 `run_app.ps1`。
-- `run_app.ps1` 使用脚本所在目录作为项目根目录。
-- `run_app.ps1` 启动 Docker 数据库、检查 8000 端口、启动后端并打开网页。
-- 脚本不会执行 `docker compose down`。
-- 脚本不会执行 `docker compose down -v`。
-- GPT-SoVITS 默认不自动启动，需要用户按需单独启动。
-
-## 暂时暂停脚本
-
-```text
-E:\my_software\chatbot\暂时暂停Chatbot.bat
-```
-
-作用：
-
-- 停止监听 8000 的 chatbot 后端进程。
-- 停止监听 9880 的 GPT-SoVITS API 进程，如果存在。
-- 在项目根目录执行 `docker compose stop`。
-- 保留 PostgreSQL 数据和 Docker volume。
-- 不执行 `docker compose down -v`。
-- 不执行 `wsl --shutdown`。
-- 适合中途休息，稍后继续开发。
-
-## 彻底停止脚本
-
-```text
-E:\my_software\chatbot\彻底停止Chatbot.bat
-```
-
-作用：
-
-- 停止监听 8000 的 chatbot 后端进程。
-- 停止监听 9880 的 GPT-SoVITS API 进程，如果存在。
-- 在项目根目录执行 `docker compose stop`。
-- 执行 `wsl --shutdown`，更彻底释放 Docker/WSL 占用内存。
-- 保留 PostgreSQL volume。
-- 不执行 `docker compose down -v`。
-
-注意：`wsl --shutdown` 会关闭所有 WSL，包括 Docker Desktop 后端和其他 WSL 终端。
-
-## 数据保护
-
-不要随便执行：
-
-```powershell
-docker compose down -v
-```
-
-这会删除 PostgreSQL volume，导致以下数据全部丢失：
-
-- 聊天记录
-- 记忆
-- 知识库
-- 本地用户
-- 人设反馈
-
-普通暂停或释放内存时，请使用：
-
-```powershell
-docker compose stop
-```
-
-## 数据库备份与恢复
-
-备份：
-
-```powershell
-cd E:\my_software\chatbot
-docker exec -t role-chatbot-postgres pg_dump -U chatbot -d role_chatbot > backup_role_chatbot.sql
-```
-
-恢复：
-
-```powershell
-Get-Content .\backup_role_chatbot.sql | docker exec -i role-chatbot-postgres psql -U chatbot -d role_chatbot
-```
-
-## 人物管理
-
-新增角色：
+进入后端目录：
 
 ```powershell
 cd E:\my_software\chatbot\backend
 conda activate 3-chatbot
+```
+
+列出角色：
+
+```powershell
+python -m tools.character_pack list
+```
+
+创建角色：
+
+```powershell
 python -m tools.character_pack new asa_mitaka --name "三鹰朝"
 ```
 
@@ -282,7 +153,7 @@ python -m tools.character_pack new asa_mitaka --name "三鹰朝"
 python -m tools.character_pack validate asa_mitaka
 ```
 
-删除角色：
+安全删除角色：
 
 ```powershell
 python -m tools.character_pack delete asa_mitaka
@@ -294,41 +165,18 @@ python -m tools.character_pack delete asa_mitaka
 python -m tools.character_pack restore asa_mitaka
 ```
 
-列出角色：
+删除角色只是移动到 `.trash`，不会删除历史聊天记录。
 
-```powershell
-python -m tools.character_pack list
-```
+## 调试接口
 
-删除只是移动到：
-
-```text
-backend/modules/characters/packs/.trash/
-```
-
-不会删除历史聊天。
-
-Debug：
+人物系统提供以下调试接口：
 
 ```text
 GET /debug/characters
 GET /debug/characters/{character_id}
 ```
 
-## 人设编辑工作台
-
-流程：
-
-1. 在聊天记录中选择一条或多条角色回复。
-2. 输入对回复的人设评价。
-3. 可点击标签把常用评价插入输入框。
-4. 发送给人设编辑 AI。
-5. 多轮讨论修改方向。
-6. 生成最终修改方案和 `preview_character_json`。
-7. 用户确认后应用修改，才写入 `character.json`。
-8. 不满意时可以回滚到上一版。
-
-相关接口：
+人设编辑接口仍保持原有路径：
 
 ```text
 POST /characters/{character_id}/persona-review/chat
@@ -337,45 +185,35 @@ POST /characters/{character_id}/persona-review/apply
 POST /characters/{character_id}/persona-review/rollback
 ```
 
-人设编辑通过 `backend/modules/characters` 读写角色包。备份路径：
+## 数据保护
 
-```text
-backend/modules/characters/packs/{character_id}/backups/character.previous.json
-```
+- 不要提交 `.env`。
+- 不要提交数据库文件和本地输出。
+- 不要提交官方头像、语音素材、模型权重。
+- 不要把真实私人聊天记录提交到 Git。
+- 不要永久删除角色包，优先使用 `.trash` 安全删除。
+- 人设编辑只有 `apply` 会写入 `character.json`。
+- `chat` 和 `finalize` 只生成讨论内容或预览方案。
 
-## 给 AI agent / Codex 的开发入口
+## 文档编码和 AI 读取说明
 
-修改后端模块前，先读：
+本项目 Markdown 文档统一使用 UTF-8 编码。
 
-```text
-docs/CODEX_GUIDE.md
-```
+如果 Codex、IDE、脚本或其他 AI 工具读取文档时出现乱码、截断或结构混乱，
+请优先检查以下问题：
 
-修改架构、模块边界或跨模块数据流前，先读：
+- 文件是否按 UTF-8 保存。
+- 终端是否按 UTF-8 显示中文。
+- Markdown 标题是否单独成行。
+- 段落之间是否有空行。
+- 列表项是否逐行书写。
+- 是否存在过长单行文本。
 
-```text
-docs/ARCHITECTURE.md
-backend/modules/README.md
-```
+新增文档时请保持普通 Markdown 格式，不要把大段内容压成一行。
 
-修改某个模块前，优先只读对应模块文档：
+## 更多文档
 
-```text
-backend/modules/{module}/README.md
-```
-
-开发规则：
-
-- 不要无目的扫描全项目。
-- 不要跨模块乱改。
-- 不要直接 import 其他模块的 repository。
-- 不要运行 `uvicorn`、`docker compose`、`git commit`、`git push`，除非用户明确要求。
-- 轻量检查优先使用 `python -m compileall .`。
-
-## 注意事项
-
-- 不要提交 `backend/.env`、根目录 `.env` 或任何 `.env.*` 本地配置。
-- 不要提交真实 API Key、数据库密码、Token、JWT 密钥或私钥文件。
-- 不要提交官方头像、语音、模型权重或其他本地素材。
-- `character.json` 可以提交。
-- `voice_refs` 下的音频、`backups` 和 `.trash` 默认被忽略。
+- [项目计划书](计划书.md)
+- [架构说明](docs/ARCHITECTURE.md)
+- [Codex 协作指南](docs/CODEX_GUIDE.md)
+- [模块说明](backend/modules/README.md)

@@ -1,65 +1,54 @@
-# Backend Modules
+# 后端模块说明
 
-`backend/modules` is the backend feature boundary for the virtual-character
-companion system. New backend work should start here instead of adding more
-logic to legacy flat packages.
+`backend/modules` 是后端业务模块目录。
 
-## Module List
+每个子目录代表一个相对独立的业务能力。
+新增功能应优先放入对应模块，而不是继续扩大旧的 `backend/services`。
 
-- `auth`: local single-user login lock, token issuance, current-user lookup.
-- `chat`: ordinary character chat flow.
-- `characters`: character packs, character templates, avatars, validation, CLI-facing character management.
-- `persona_review`: persona feedback, persona editor discussion, preview, apply, and rollback flow.
-- `memory`: long-term memory records used by chat.
-- `knowledge`: knowledge items and retrieval support.
-- `voice`: GPT-SoVITS-facing voice synthesis.
-- `relationship_memory`: future shared character-understanding layer across scenarios.
-- `schedule`: reserved module for future schedule management.
-- `diary`: reserved module for future diary reading and diary conversations.
-- `debug`: local development/debug endpoints.
-- `health`: lightweight health checks.
+## 当前模块
 
-## File Roles
+- `auth`：本地登录和认证保护。
+- `chat`：普通聊天入口。
+- `characters`：人物系统和角色包管理。
+- `persona_review`：人设编辑工作台后端。
+- `memory`：长期记忆。
+- `knowledge`：知识库。
+- `voice`：语音调用。
+- `debug`：调试接口。
+- `health`：健康检查。
+- `relationship_memory`：共享关系记忆预留。
+- `schedule`：日程预留。
+- `diary`：日记预留。
 
-- `api.py`: HTTP boundary only. Parse requests, call services, return responses.
-- `service.py`: business logic and orchestration.
-- `repository.py`: database or filesystem persistence boundary.
-- `schemas.py`: module-specific request/response models.
-- `README.md`: ownership, dependency rules, data boundary, and Codex guidance.
+## 模块约定
 
-## Dependency Rules
+模块内通常可以包含：
 
-- Modules must not casually import another module's `repository.py`.
-- Cross-module calls should use the other module's public `service.py` API.
-- Shared utilities belong in `core` or a future shared module, not in an unrelated feature module.
-- Do not keep adding feature-specific SQL to one large shared service.
-- New features should get their own `backend/modules/{feature}` directory.
-- A bug in one module should usually be fixed in that module only.
-- Do not restore mock fallbacks or silent defaults.
+- `api.py`：FastAPI router。
+- `service.py`：业务逻辑。
+- `schemas.py`：本模块请求和响应模型。
+- `README.md`：模块说明。
 
-## Chat, Schedule, Diary
+如果模块涉及文件系统边界，可以继续拆出 repository、loader、writer、validator。
 
-`chat`, `schedule`, and `diary` are peer business domains.
+## 人物系统
 
-- `chat` owns ordinary chat sessions and turns.
-- `schedule` will own schedule plans, items, reviews, and schedule feedback.
-- `diary` will own diary entries, reading sessions, and reading turns.
+人物系统集中在：
 
-They do not share business conversation tables. Future `schedule` and `diary`
-code must not write to `chat_sessions` or `chat_turns`.
+```text
+backend/modules/characters/
+```
 
-The three domains may share durable character understanding through
-`relationship_memory`, so the same character can carry understanding of the user
-across different scenarios without mixing business data.
+角色包集中在：
 
-## Character Access
+```text
+backend/modules/characters/packs/
+```
 
-Character data is owned only by `characters`.
+其他模块需要角色数据时，应通过 `characters` 模块读取。
 
-Other modules should not build paths under `backend/modules/characters/packs`
-themselves. Use the public characters service or loader/writer helpers.
+## 文档编码
 
-## Adding A Module
+本目录下 Markdown 文档统一使用 UTF-8。
 
-Copy `backend/modules/MODULE_TEMPLATE.md` into the new module README and fill in
-the boundaries before adding business logic.
+如果 AI 工具读取异常，先检查编码、换行和过长单行。

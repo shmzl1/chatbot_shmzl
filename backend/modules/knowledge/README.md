@@ -1,36 +1,21 @@
-# Knowledge Module
+# knowledge 模块
 
-## Module Responsibility
+`knowledge` 模块负责知识库相关能力。
 
-Knowledge item creation, listing, deletion, and retrieval support for character
-responses.
+## 职责
 
-## Not Responsible For
+- 管理知识条目。
+- 为聊天提供可检索的背景信息。
+- 与数据库中的知识库数据协作。
 
-Character-pack ownership, chat session ownership, memories, schedule, diary, or
-persona-review writes.
+## 边界
 
-## Public Interfaces
+本模块不管理人物包。
 
-- `/knowledge...` routes
-- Retrieval support used by chat
+如果知识检索需要角色设定，应通过 `modules.characters` 获取角色数据。
 
-## Data Boundary
+## 注意事项
 
-Owns knowledge records in PostgreSQL. Character pack lore/dialogue/reaction data
-is owned by `characters`, not this module.
-
-## Allowed Dependencies
-
-May use database access, core schemas, and character IDs supplied by callers.
-
-## Forbidden Dependencies
-
-Must not write chat sessions. Must not read old scattered `backend/data/lore`,
-`backend/data/dialogues`, or `backend/data/reactions` as primary character data.
-
-## Codex Notes
-
-For knowledge work, keep persistent knowledge separate from character-pack
-content. Do not move character-pack data into this module.
-
+- 不要读取旧的人物数据目录。
+- 不要把人物 lore 复制成另一套长期数据源。
+- 知识库错误应明确暴露，方便排查。

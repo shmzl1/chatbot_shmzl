@@ -1,34 +1,21 @@
-# Memory Module
+# memory 模块
 
-## Module Responsibility
+`memory` 模块负责长期记忆相关能力。
 
-Long-term memory records used by ordinary chat.
+## 职责
 
-## Not Responsible For
+- 保存和读取与用户相关的长期记忆。
+- 为聊天提供上下文。
+- 支持后续记忆摘要和记忆维护。
 
-Future cross-scenario `relationship_memory`, character packs, knowledge items,
-schedule plans, or diary entries.
+## 边界
 
-## Public Interfaces
+本模块不负责人物包读写。
 
-- `/memory...` routes
-- Memory suggestion support used by chat
+人物性格、说话风格、示例对话和反应规则仍属于 `characters` 模块。
 
-## Data Boundary
+## 注意事项
 
-Owns current long-term memory records in PostgreSQL.
-
-## Allowed Dependencies
-
-May use database access, core schemas, and LLM helpers where already wired.
-
-## Forbidden Dependencies
-
-Must not write chat turns directly. Must not write schedule/diary business data.
-
-## Codex Notes
-
-Do not confuse current `memory` with future `relationship_memory`. If a task
-asks for cross-scenario character understanding, read the relationship memory
-README first.
-
+- 不要删除用户记忆。
+- 不要把私人记忆写入 Git 跟踪文件。
+- 不要用记忆数据覆盖角色人设。

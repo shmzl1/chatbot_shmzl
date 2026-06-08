@@ -1,47 +1,41 @@
-# Module Name
+# 模块 README 模板
 
-## Module Responsibility
+复制本模板时，请把标题和内容替换为真实模块说明。
 
-Describe what this module owns. Keep this section short and concrete.
+## 模块职责
 
-## Not Responsible For
+说明这个模块负责什么业务。
 
-List responsibilities that belong to other modules.
+示例：
 
-## Public Interfaces
+- 管理某类 API。
+- 封装某类业务逻辑。
+- 维护某类数据访问边界。
 
-List FastAPI routes and public service methods that other modules may call.
+## 主要文件
 
-## Internal File Responsibilities
+- `api.py`：FastAPI router。
+- `service.py`：业务逻辑。
+- `schemas.py`：请求和响应模型。
+- `README.md`：模块说明。
 
-- `api.py`: HTTP request/response boundary only.
-- `service.py`: business logic and orchestration.
-- `repository.py`: database or filesystem persistence boundary.
-- `schemas.py`: module request/response models.
-- `README.md`: module ownership, dependency rules, and debugging notes.
+按实际情况删除不存在的文件说明。
 
-## Allowed Dependencies
+## 依赖关系
 
-List modules or shared utilities this module may import.
+说明本模块可以依赖哪些模块或服务。
 
-## Forbidden Dependencies
+如果依赖人物数据，优先通过 `modules.characters` 读取。
 
-List modules or repositories this module must not import.
+## 数据边界
 
-## Data Boundary
+说明本模块会读取或写入哪些数据。
 
-Document owned tables, files, directories, and external services.
+如果模块不写文件或数据库，也应明确说明。
 
-## Error Handling
+## 注意事项
 
-Explain how database, filesystem, LLM, or external-service errors should be exposed.
-Do not hide errors with mock fallbacks.
-
-## Debugging
-
-Explain how to verify this module locally without running long tasks.
-
-## Codex Notes
-
-Before editing this module, read this README and the directly related files.
-Avoid cross-module changes unless the public interface requires them.
+- 不要静默吞掉关键错误。
+- 不要绕过已有 service。
+- 不要在模块外复制路径拼接逻辑。
+- 不要把临时实现写成长期接口。

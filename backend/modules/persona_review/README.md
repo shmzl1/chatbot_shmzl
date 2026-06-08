@@ -1,41 +1,35 @@
-# Persona Review Module
+# persona_review 模块
 
-## Module Responsibility
+`persona_review` 模块负责人设编辑闭环。
 
-Persona feedback and persona editor flow: save per-turn feedback, discuss
-revision direction, generate preview JSON, apply confirmed changes, and rollback
-the previous version.
+## 职责
 
-## Not Responsible For
+- 接收用户选中的聊天片段。
+- 记录用户对角色回复的评价。
+- 与人设编辑 AI 多轮讨论修改方向。
+- 生成最终修改方案。
+- 生成 `preview_character_json`。
+- 在用户确认后应用修改。
+- 支持上一版人设回滚。
 
-Ordinary chat, schedule, diary, permanent character deletion, or direct
-character-pack path construction outside the characters module.
+## 安全流程
 
-## Public Interfaces
+```text
+chat      只讨论，不写文件
+finalize  只生成预览，不写文件
+apply     校验后写入 character.json
+rollback  恢复上一版备份
+```
 
-- `/feedback/persona...` routes
-- `POST /characters/{character_id}/persona-review/chat`
-- `POST /characters/{character_id}/persona-review/finalize`
-- `POST /characters/{character_id}/persona-review/apply`
-- `POST /characters/{character_id}/persona-review/rollback`
+## 人物依赖
 
-## Data Boundary
+读取和写入角色包必须通过 `modules.characters`。
 
-Reads feedback from PostgreSQL. Reads/writes character packs only through the
-characters module. `finalize` returns a preview; only `apply` writes files after
-user confirmation.
+不要在本模块中重新拼接人物包路径。
 
-## Allowed Dependencies
+## 注意事项
 
-May call the characters service/pack writer, database access, and LLM service.
-
-## Forbidden Dependencies
-
-Must not write ordinary chat sessions for editor discussion. Must not bypass
-characters validation. Must not modify protected character fields.
-
-## Codex Notes
-
-When editing persona review, verify chat/finalize/apply/rollback separation.
-Never make chat or finalize write `character.json`.
-
+- 不要让 `chat` 或 `finalize` 写入角色包。
+- 不要绕过角色包校验。
+- 不要修改受保护字段。
+- LLM 失败时返回明确错误。

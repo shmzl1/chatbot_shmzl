@@ -1,39 +1,21 @@
-# Relationship Memory Module
+# relationship_memory 模块
 
-## Module Responsibility
+`relationship_memory` 是共享关系记忆预留模块。
 
-Future shared layer for durable understanding that one character has about the
-user across scenarios.
+## 当前状态
 
-## Not Responsible For
+当前项目尚未完整实现共享关系记忆。
 
-It is not an ordinary chat table, not a schedule table, and not a diary table.
-It does not currently implement persistence.
+该目录用于后续承载跨人物的用户关系信息和共同经历。
 
-## Future Public Interfaces
+## 未来职责
 
-- Collect insights from chat.
-- Collect insights from schedule review.
-- Collect insights from diary reading.
-- Provide relationship context for a character.
+- 保存用户和多个角色之间的共享关系状态。
+- 为不同角色提供一致的长期背景。
+- 与普通记忆和聊天模块协作。
 
-## Data Boundary
+## 注意事项
 
-Future table sketch: `relationship_memory_events` with `character_id`,
-`source_type`, `source_id`, `memory_type`, `content`, `evidence`,
-`importance`, timestamps, and active state.
-
-## Allowed Dependencies
-
-Future chat/schedule/diary modules may call public relationship-memory services.
-
-## Forbidden Dependencies
-
-Must not store complete chat, schedule, or diary business records. Must not
-replace those modules' own tables.
-
-## Codex Notes
-
-This is a placeholder. Do not wire it into business flows or create migrations
-unless the user explicitly asks.
-
+- 当前不要新增相关数据库迁移。
+- 不要影响普通聊天主流程。
+- 不要把共享关系记忆写进某个单独角色包。

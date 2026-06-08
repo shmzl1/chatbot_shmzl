@@ -1,34 +1,27 @@
-# Voice Module
+# voice 模块
 
-## Module Responsibility
+`voice` 模块负责可选语音能力。
 
-Optional GPT-SoVITS voice synthesis and voice test endpoints.
+## 职责
 
-## Not Responsible For
+- 读取当前角色的语音配置。
+- 调用 GPT-SoVITS 服务。
+- 返回生成的语音文件信息。
 
-Character-pack ownership, chat content generation, schedule, diary, or memory.
+## 人物依赖
 
-## Public Interfaces
+语音配置来自角色包中的 `voice` 字段。
 
-- Voice test routes
-- TTS service used by chat when voice is enabled
+如果 `ref_audio_path` 是相对路径，应相对于当前角色包目录解析。
 
-## Data Boundary
+## 边界
 
-Writes generated audio to backend outputs. Reads voice configuration from the
-character object loaded through the characters module.
+语音能力是可选能力。
 
-## Allowed Dependencies
+语音服务不可用时，不应破坏普通文字聊天。
 
-May use characters public service for resolving character-pack-relative voice
-paths, settings, and HTTP calls to GPT-SoVITS.
+## 注意事项
 
-## Forbidden Dependencies
-
-Must not assume old character-pack paths. Must not pretend success when
-reference audio or GPT-SoVITS is missing.
-
-## Codex Notes
-
-Voice errors should be explicit. Do not introduce a fake audio fallback.
-
+- 不要硬编码旧角色包路径。
+- 不要提交语音素材和模型权重。
+- 参考音频缺失时应返回明确错误。

@@ -1,61 +1,78 @@
-# Characters Module
+# characters 模块
 
-## Module Responsibility
+`characters` 是人物系统核心模块。
 
-Owns the character/person system: character packs, templates, validation,
-create/update/delete/restore, avatar updates, and character-pack filesystem
-boundaries.
+人物模板、人物包、读写、校验、CLI 和 debug 都围绕本模块管理。
 
-## Not Responsible For
-
-Ordinary chat turns, persona feedback records, schedule data, diary data,
-memories, knowledge records, or voice synthesis execution.
-
-## Public Interfaces
-
-- `GET /characters`
-- `GET /characters/{character_id}`
-- `POST /characters`
-- `PATCH /characters/{character_id}`
-- `DELETE /characters/{character_id}`
-- `POST /characters/{character_id}/restore`
-- `POST /characters/{character_id}/avatar`
-- `GET /characters/{character_id}/validate`
-- CLI: `python -m tools.character_pack ...`
-
-## Internal File Responsibilities
-
-- `api.py`: character HTTP routes and persona-review route hosting.
-- `service.py`: character business operations.
-- `repository.py`: module paths: templates, packs, trash, backups.
-- `pack_loader.py`: read and parse `character.json`.
-- `pack_writer.py`: safe writes, backups, trash, restore.
-- `validator.py`: character-pack validation.
-- `schemas.py`: character module request/response models.
-
-## Data Boundary
-
-The only character data source is:
+## 目录结构
 
 ```text
-backend/modules/characters/packs/{character_id}/character.json
+backend/modules/characters/
+  api.py
+  service.py
+  repository.py
+  schemas.py
+  pack_loader.py
+  pack_writer.py
+  validator.py
+  templates/
+    default_character.json
+  packs/
+    role01/
+      character.json
+      voice_refs/
+        neutral/
+          .gitkeep
+      backups/
+        .gitkeep
+    .trash/
+      .gitkeep
 ```
 
-Templates live at:
+## 职责
+
+- 列出 active 角色。
+- 读取角色详情。
+- 创建角色包。
+- 更新角色包。
+- 安全删除角色到 `.trash`。
+- 从 `.trash` 恢复角色。
+- 上传并记录角色头像。
+- 校验角色包。
+- 提供人物 debug 信息。
+
+## 角色包
+
+每个角色一个目录：
 
 ```text
-backend/modules/characters/templates/
+backend/modules/characters/packs/{character_id}/
 ```
 
-The project no longer uses `backend/data/character_packs`.
+`character.json` 是唯一必需文件。
 
-`character.json` is not ignored by Git. Local voice files, `backups`, and
-`.trash` are ignored except for `.gitkeep` placeholders.
+`voice_refs/` 保存本角色语音参考素材。
+
+`backups/` 保存上一版 `character.json`。
+
+旧目录 `backend/data/character_packs` 已废弃。
+不要在新代码中恢复旧路径。
+
+## 主要文件
+
+- `repository.py`：统一管理路径。
+- `pack_loader.py`：只负责读取角色包。
+- `pack_writer.py`：只负责安全写入角色包。
+- `validator.py`：只负责校验角色包。
+- `service.py`：角色业务逻辑。
+- `api.py`：角色相关 FastAPI router。
+- `schemas.py`：本模块请求和响应模型。
 
 ## CLI
 
+进入后端目录后可以使用：
+
 ```powershell
-cd backend
 python -m tools.character_pack list
 python -m tools.character_pack new asa_mitaka --name "三鹰朝"
 python -m tools.character_pack validate asa_mitaka
@@ -63,27 +80,10 @@ python -m tools.character_pack delete asa_mitaka
 python -m tools.character_pack restore asa_mitaka
 ```
 
-Delete only moves a pack to:
+## 注意事项
 
-```text
-backend/modules/characters/packs/.trash/
-```
-
-It does not delete historical chat records.
-
-## Allowed Dependencies
-
-May use core schemas/config, avatar service, database avatar map compatibility,
-and persona review service for hosted persona-review routes.
-
-## Forbidden Dependencies
-
-Other modules must not build character-pack paths themselves. They should call
-the characters service or loader/writer helpers. This module must not write chat
-sessions, memories, knowledge records, schedule data, or diary data.
-
-## Codex Notes
-
-For character tasks, start here. Usually inspect `service.py`,
-`repository.py`, `pack_loader.py`, `pack_writer.py`, and `validator.py`.
-Do not reintroduce old `backend/data/character_packs`.
+- 不允许静默返回默认角色。
+- 不允许 fallback 到 mock。
+- 写入前必须校验。
+- 删除只能移动到 `.trash`。
+- `role01` 是默认角色，不应被安全删除接口删除。

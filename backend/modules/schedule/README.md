@@ -1,37 +1,21 @@
-# Schedule Module
+# schedule 模块
 
-## Module Responsibility
+`schedule` 是日程功能预留模块。
 
-Reserved module for future schedule planning, schedule items, reviews, and
-schedule feedback.
+## 当前状态
 
-## Not Responsible For
+当前项目没有实现日程管理。
 
-Currently no business implementation. It does not own chat sessions, diary
-entries, or character packs.
+该目录仅用于后续规划。
 
-## Future Public Interfaces
+## 未来职责
 
-Future routes may support creating plans, editing items, reviewing completion,
-and generating character feedback.
+- 创建、读取、更新和删除日程。
+- 在聊天中提醒用户相关安排。
+- 与长期记忆和角色陪伴逻辑协作。
 
-## Data Boundary
+## 注意事项
 
-Future tables may include `schedule_plans`, `schedule_items`, and
-`schedule_reviews`. This module must not write to `chat_sessions` or
-`chat_turns`.
-
-## Allowed Dependencies
-
-May read characters through the characters module and later share insights
-through `relationship_memory`.
-
-## Forbidden Dependencies
-
-Must not import diary repositories. Must not store schedule data as chat turns.
-
-## Codex Notes
-
-This module is placeholder-only. Do not implement schedule business logic unless
-the user explicitly asks.
-
+- 当前不要新增日程数据库表。
+- 当前不要接入前端日程 UI。
+- 不要影响普通聊天接口。

@@ -1,29 +1,20 @@
-# Health Module
+# health 模块
 
-## Module Responsibility
+`health` 模块负责健康检查。
 
-Lightweight health checks for local development.
+## 职责
 
-## Not Responsible For
+- 提供后端存活检查接口。
+- 辅助本地启动脚本确认服务状态。
 
-Business diagnostics, database export, character validation, or admin actions.
+## 边界
 
-## Public Interfaces
+健康检查不应触发复杂业务逻辑。
 
-- `GET /health`
+它不应读取人物包、调用 LLM、连接语音服务或修改数据库。
 
-## Data Boundary
+## 注意事项
 
-Read-only status checks.
-
-## Allowed Dependencies
-
-May use settings and database readiness helpers.
-
-## Forbidden Dependencies
-
-Must not mutate data or start/stop external services.
-
-## Codex Notes
-
-Keep health checks fast and side-effect free.
+- 保持接口轻量。
+- 返回信息应简单明确。
+- 不要在健康检查里做耗时任务。

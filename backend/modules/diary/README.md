@@ -1,38 +1,22 @@
-# Diary Module
+# diary 模块
 
-## Module Responsibility
+`diary` 是日记功能预留模块。
 
-Reserved module for future diary entries, diary reading sessions, and
-character-specific diary conversations.
+## 当前状态
 
-## Not Responsible For
+本轮项目没有实现日记系统。
 
-Currently no business implementation. It does not own chat sessions, schedule
-plans, or character packs.
+该目录用于后续承载日记读取、摘要、权限和相关 API。
 
-## Future Public Interfaces
+## 未来职责
 
-Future routes may support diary entry management, selecting entries for a
-character to read, and diary-reading conversations.
+- 读取用户授权的日记内容。
+- 提取可用于陪伴的长期信息。
+- 控制隐私和读取范围。
+- 与聊天或记忆模块协作。
 
-## Data Boundary
+## 注意事项
 
-Future tables may include `diary_entries`, `diary_reading_sessions`, and
-`diary_reading_turns`. This module must not write to `chat_sessions` or
-`chat_turns`.
-
-## Allowed Dependencies
-
-May read characters through the characters module and later share insights
-through `relationship_memory`.
-
-## Forbidden Dependencies
-
-Must not import schedule repositories. Must not store diary reading turns as
-ordinary chat turns.
-
-## Codex Notes
-
-This module is placeholder-only. Do not implement diary business logic unless
-the user explicitly asks.
-
+- 当前不要新增日记数据库表。
+- 当前不要接入前端日记功能。
+- 不要把私人日记内容提交到 Git。

@@ -1,39 +1,28 @@
-# Debug Module
+# debug 模块
 
-## Module Responsibility
+`debug` 模块负责提供开发和排错用接口。
 
-Local development debug endpoints for database state, character diagnostics,
-session inspection, and feedback debugging.
+## 职责
 
-## Not Responsible For
+- 暴露人物系统 debug 信息。
+- 汇总 active 和 trash 角色状态。
+- 帮助定位角色包缺失、JSON 错误和校验错误。
 
-Production admin features, destructive reset flows, migrations, or business
-logic.
+## 主要接口
 
-## Public Interfaces
+```text
+GET /debug/characters
+GET /debug/characters/{character_id}
+```
 
-- `GET /debug/database`
-- `GET /debug/export`
-- `GET /debug/characters`
-- `GET /debug/characters/{character_id}`
-- Session and feedback debug routes.
+## 边界
 
-## Data Boundary
+debug 接口只展示状态，不应修改业务数据。
 
-Reads existing data for diagnostics. Should not silently repair or delete data.
+如果需要修复人物包，应通过 characters 模块或 CLI 操作。
 
-## Allowed Dependencies
+## 注意事项
 
-May call public services from database, characters, and persona review for
-diagnostic output.
-
-## Forbidden Dependencies
-
-Must not perform destructive cleanup. Must not run migrations outside normal
-startup flow.
-
-## Codex Notes
-
-Debug changes should expose clearer facts, not hide errors. Keep debug output
-useful for local troubleshooting.
-
+- 不要在 debug 接口里写文件。
+- 不要隐藏校验错误。
+- 不要输出敏感环境变量。

@@ -1,38 +1,22 @@
-# Auth Module
+# auth 模块
 
-## Module Responsibility
+`auth` 模块负责本地单用户登录和接口保护。
 
-Local single-user login lock: setup, login, logout, current-user lookup, token
-validation, and user avatar upload.
+## 职责
 
-## Not Responsible For
+- 提供登录相关 API。
+- 复用现有认证依赖。
+- 保护需要登录的后端接口。
 
-Character data, chat sessions, persona review, memories, knowledge, or voice.
+## 边界
 
-## Public Interfaces
+本模块不负责聊天、人设编辑、人物包读写和数据库迁移。
 
-- `/auth/status`
-- `/auth/setup`
-- `/auth/login`
-- `/auth/me`
-- `/auth/me/avatar`
-- `/auth/logout`
-- `get_current_user`
+如果其他模块需要登录保护，应复用已有认证依赖，
+不要重新实现一套登录逻辑。
 
-## Data Boundary
+## 注意事项
 
-Owns local user authentication records through existing database access.
-
-## Allowed Dependencies
-
-May use `core.security`, `core.schemas`, avatar helpers, and database access.
-
-## Forbidden Dependencies
-
-Must not import chat, schedule, diary, persona review, or character repositories.
-
-## Codex Notes
-
-For auth tasks, read this README, `api.py`, and existing auth service code.
-Avoid changing login behavior unless the user explicitly asks.
-
+- 不要改变当前登录主流程，除非任务明确要求。
+- 不要在业务模块里复制登录校验代码。
+- 不要把本地用户信息写入人物包。

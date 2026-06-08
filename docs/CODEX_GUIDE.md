@@ -1,64 +1,64 @@
-# Codex Development Guide
+# Codex 协作指南
 
-This guide is the first stop for AI agents working on the project.
+本文档说明 Codex 在本项目中改代码和读文档时应遵守的边界。
 
-## Project Principles
+## 基本原则
 
-- Keep modules loosely coupled.
-- Modify by feature module whenever possible.
-- Do not make broad cross-module changes for a local bug.
-- Do not restore mock fallbacks or silent defaults.
-- Do not swallow configuration, database, character-pack, LLM, or voice errors.
-- Do not run long tasks automatically.
-- Do not run `git commit` or `git push` unless the user explicitly asks.
+- 先读现有代码，再决定改法。
+- 优先复用已有模块和服务。
+- 不做用户没有要求的大重构。
+- 不恢复 mock 或静默兜底。
+- 不随意修改数据库结构。
+- 不提交 Git。
+- 不启动长期运行的服务，除非用户明确要求。
 
-## Reading Order
+## 人物系统边界
 
-Read only the smallest useful set of files first.
+人物相关功能集中在：
 
-- Login/auth task: `backend/modules/auth/README.md`
-- Ordinary chat task: `backend/modules/chat/README.md`
-- Character/person task: `backend/modules/characters/README.md`
-- Persona editor task: `backend/modules/persona_review/README.md`
-- Memory task: `backend/modules/memory/README.md`
-- Knowledge task: `backend/modules/knowledge/README.md`
-- Voice task: `backend/modules/voice/README.md`
-- Schedule task: `backend/modules/schedule/README.md`
-- Diary task: `backend/modules/diary/README.md`
-- Debug task: `backend/modules/debug/README.md`
-- Architecture/refactor task: `docs/ARCHITECTURE.md` and `backend/modules/README.md`
+```text
+backend/modules/characters/
+```
 
-After reading the module README, inspect only that module's `api.py`,
-`service.py`, `repository.py`, and `schemas.py` as needed.
+新增人物读写能力时，优先使用以下文件：
 
-## Required Final Report
+- `repository.py`
+- `pack_loader.py`
+- `pack_writer.py`
+- `validator.py`
+- `service.py`
+- `api.py`
 
-Every Codex change should report:
+不要在聊天、语音、检索或人设编辑模块中重新拼接人物包路径。
 
-- Modified files.
-- Why those files were changed.
-- Whether the change crossed module boundaries.
-- Whether database code changed.
-- Whether a migration was added.
-- Whether frontend code changed.
-- Whether README/docs changed.
-- Lightweight check results.
+## 人设编辑边界
 
-## Default Forbidden Commands
+人设编辑流程必须保持安全：
 
-Do not run these unless the user explicitly requests them:
+- `chat` 只讨论修改方向。
+- `finalize` 只生成最终方案和预览 JSON。
+- `apply` 在用户确认后才写入 `character.json`。
+- `rollback` 只恢复上一版备份。
 
-- `uvicorn main:app --reload`
-- `docker compose up`
-- `docker compose down`
-- `docker compose down -v`
-- `git commit`
-- `git push`
-- Long-running frontend or backend sessions
+写入角色包必须经过人物模块的写入和校验逻辑。
 
-## Lightweight Checks
+## 文档要求
 
-Preferred syntax check:
+Markdown 文档统一使用 UTF-8。
+
+写文档时保持以下格式：
+
+- 标题单独成行。
+- 段落之间留空行。
+- 列表项逐行书写。
+- 命令使用 fenced code block。
+- 不把大段文字压成一行。
+
+如果 AI 工具读取文档失败，优先检查编码、换行和过长单行。
+
+## 轻量检查
+
+常用检查命令：
 
 ```powershell
 cd E:\my_software\chatbot\backend
@@ -66,6 +66,12 @@ conda activate 3-chatbot
 python -m compileall .
 ```
 
-If `compileall` cannot write to existing `__pycache__`, use a temporary pycache
-prefix and report that detail.
+如果只是改文档，可以额外检查 Markdown 是否能按 UTF-8 读取。
 
+## 禁止事项
+
+- 不运行 `docker compose down -v`。
+- 不删除数据库、聊天记录、记忆和知识库。
+- 不永久删除角色包。
+- 不绕过 `.trash` 删除人物。
+- 不把官方素材、语音和模型权重提交到 Git。

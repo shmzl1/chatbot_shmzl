@@ -1,38 +1,30 @@
-# Chat Module
+# chat 模块
 
-## Module Responsibility
+`chat` 模块负责普通角色聊天。
 
-Ordinary character chat flow: load character, retrieve context, build prompt,
-call LLM, judge/rewrite reply, optionally synthesize voice, and save chat turns.
+## 职责
 
-## Not Responsible For
+- 接收前端聊天请求。
+- 读取当前角色信息。
+- 调用检索、记忆和 LLM 相关服务。
+- 保存聊天会话和聊天轮次。
+- 返回角色文本回复和可选语音信息。
 
-Schedule planning, diary reading, character-pack writing, persona-review apply,
-or relationship-memory persistence.
+## 人物依赖
 
-## Public Interfaces
+聊天所需的人物数据应通过 `modules.characters` 获取。
 
-- `POST /chat/text`
-- `POST /chat`
+不要在本模块中拼接角色包路径。
+不要读取旧的 `backend/data/character_packs`。
 
-## Data Boundary
+## 边界
 
-Owns ordinary chat sessions and turns in PostgreSQL. It may read characters via
-the characters module and may read memories/knowledge through their public APIs.
+本模块不负责人设修改。
 
-## Allowed Dependencies
+如果用户要修正角色设定，应走 `persona_review` 流程。
 
-May call public services for characters, retrieval, memory, knowledge, LLM,
-style judging, rewrite, emotion, and voice.
+## 注意事项
 
-## Forbidden Dependencies
-
-Must not write schedule or diary data. Must not import schedule/diary
-repositories. Must not build character-pack filesystem paths directly.
-
-## Codex Notes
-
-For chat bugs, inspect chat API/service flow and prompt/retrieval dependencies.
-Do not change persona review, schedule, diary, or character-pack writing unless
-the bug crosses a public interface.
-
+- 不要改变普通聊天接口路径。
+- 不要静默吞掉角色包读取错误。
+- 不要因为语音失败破坏文字聊天返回。
