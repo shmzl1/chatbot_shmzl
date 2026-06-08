@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from core.config import settings
 from core.schemas import CharacterCard
+from services.character_service import character_service
 
 
 class TTSService:
@@ -80,9 +81,9 @@ class TTSService:
                     status_code=400,
                     detail=f"Missing reference audio: {ref_audio_path}",
                 )
-            return ref_audio_path, character.voice.prompt_text.strip()
+            return ref_audio_path, str(character.voice.prompt_text or "").strip()
 
-        pack_voice_dir = settings.data_dir / "character_packs" / character.id / "voice_refs"
+        pack_voice_dir = character_service.pack_dir(character.id) / "voice_refs"
         emotion_dir = pack_voice_dir / emotion
         fallback_dir = pack_voice_dir / "neutral"
 
@@ -113,7 +114,7 @@ class TTSService:
         if backend_relative.exists() or configured_path.startswith((".", "data/")):
             return backend_relative
 
-        return (settings.data_dir / "character_packs" / character_id / path).resolve()
+        return character_service.resolve_pack_relative_path(character_id, configured_path)
 
     def _filename(self, character_id: str, emotion: str) -> str:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")

@@ -1,5 +1,72 @@
 # Local Role Voice Chatbot
 
+## 人物 / 角色系统
+
+人物系统现在集中在 `backend/modules/characters`。
+
+公共角色模板在：
+
+```text
+backend/modules/characters/templates/
+```
+
+每个角色的数据在：
+
+```text
+backend/modules/characters/packs/{character_id}/
+```
+
+一个角色一个文件夹，`character.json` 是唯一必需文件。角色自己的
+`voice_refs/` 和 `backups/` 都放在角色目录下。
+
+默认角色 `role01` 已迁移到：
+
+```text
+backend/modules/characters/packs/role01/
+```
+
+旧目录 `backend/data/character_packs` 保留用于避免误删历史数据，但不再推荐作为新增角色位置。
+
+创建角色：
+
+```powershell
+cd backend
+python -m tools.character_pack new asa_mitaka --name "三鹰朝"
+```
+
+校验角色：
+
+```powershell
+python -m tools.character_pack validate asa_mitaka
+```
+
+安全删除角色：
+
+```powershell
+python -m tools.character_pack delete asa_mitaka
+```
+
+删除只会移动到 `.trash`，不会删除历史聊天。
+
+恢复角色：
+
+```powershell
+python -m tools.character_pack restore asa_mitaka
+```
+
+Debug：
+
+```text
+GET /debug/characters
+GET /debug/characters/{character_id}
+```
+
+人设编辑 `persona_review` 会通过 characters 模块读写角色包。普通聊天也通过
+characters 模块读取角色，retrieval 使用角色包里的 `lore`、`dialogues` 和
+`reactions`。
+
+不要把官方头像、语音、模型权重或其他本地素材提交到 GitHub。
+
 ## 后端模块结构
 
 后端开始采用 `backend/modules` 按功能域组织代码。当前是兼容式迁移：

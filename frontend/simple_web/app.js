@@ -671,14 +671,26 @@ async function loadCharacters() {
   const payload = await requestJson("/characters");
   state.characters = payload.characters || [];
   renderCharacters();
+  const currentId = getCharacterId();
+  if (state.characters.length && !state.characters.some((character) => character.id === currentId)) {
+    setCharacterId(state.characters[0].id);
+  }
 }
 
 async function loadCharacterCard() {
   const characterId = getCharacterId();
-  const payload = await requestJson(`/characters/${encodeURIComponent(characterId)}`);
-  state.currentCharacter = payload;
-  elements.characterJsonInput.value = JSON.stringify(payload, null, 2);
-  renderCharacterPanel();
+  try {
+    const payload = await requestJson(`/characters/${encodeURIComponent(characterId)}`);
+    state.currentCharacter = payload;
+    elements.characterJsonInput.value = JSON.stringify(payload, null, 2);
+    renderCharacterPanel();
+  } catch (error) {
+    state.currentCharacter = null;
+    elements.characterJsonInput.value = `// ${friendlyError(error)}`;
+    renderCharacterPanel();
+    setStatus("Character load error");
+    throw error;
+  }
 }
 
 async function saveCharacterCard() {

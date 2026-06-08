@@ -1,0 +1,74 @@
+{
+  "id": "new_character",
+  "display_name": "新角色",
+  "avatar_url": null,
+  "core_personality": [
+    "这里写角色核心性格"
+  ],
+  "speaking_style": [
+    "这里写角色说话风格"
+  ],
+  "relationship_to_user": "这里写角色和用户的关系",
+  "forbidden": [
+    "禁止的表达或风格"
+  ],
+  "reply_patterns": {
+    "comfort": "安慰时的回复原则",
+    "praise": "鼓励时的回复原则",
+    "anger": "用户生气时的回复原则",
+    "teasing": "轻微吐槽时的回复原则",
+    "serious": "严肃问题时的回复原则"
+  },
+  "style_contract": {
+    "must": [],
+    "should": [],
+    "avoid": [],
+    "hard_bans": []
+  },
+  "evaluation_criteria": [],
+  "bad_examples": [],
+  "revision_notes": [],
+  "lore": [
+    {
+      "id": "lore_001",
+      "title": "基础设定",
+      "content": "这里写角色基础设定。",
+      "tags": [
+        "base"
+      ]
+    }
+  ],
+  "dialogues": [
+    {
+      "id": "dialogue_001",
+      "scene": "用户问你是谁",
+      "user": "你是谁？",
+      "assistant": "这里写符合人设的示例回复。",
+      "emotion": "neutral",
+      "intent": "identity",
+      "style_summary": "体现角色核心语气。",
+      "rewrite_rule": "生成时靠近这种风格，但不要机械复读。"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "reaction_001",
+      "situation": "用户焦虑",
+      "reaction": "角色应如何反应。",
+      "reply_pattern": "回复模式。",
+      "avoid": [
+        "不要做什么"
+      ]
+    }
+  ],
+  "voice": {
+    "default_emotion": "neutral",
+    "language": "zh",
+    "text_lang": "zh",
+    "prompt_lang": "zh",
+    "speed_factor": 1.0,
+    "gptsovits_base_url": null,
+    "ref_audio_path": null,
+    "prompt_text": null
+  }
+}

@@ -28,7 +28,7 @@ class VoiceConfig(BaseModel):
     speed_factor: float = 1.0
     gptsovits_base_url: Optional[str] = None
     ref_audio_path: Optional[str] = None
-    prompt_text: str = ""
+    prompt_text: Optional[str] = None
 
 
 class StyleContract(BaseModel):

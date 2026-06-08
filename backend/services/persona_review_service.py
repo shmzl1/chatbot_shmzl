@@ -1,6 +1,4 @@
 import json
-import os
-import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -8,9 +6,9 @@ from typing import Any, Dict, List
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from core.config import settings
 from core.schemas import CharacterCard, CharacterSummary
-from services.character_service import CHARACTER_FILE, character_service
+from modules.characters import pack_writer
+from services.character_service import character_service
 from services.database_service import database_service
 from services.llm_service import llm_service
 
@@ -330,23 +328,10 @@ class PersonaReviewService:
             )
 
         file_path = self._character_path(character_id)
-        backup_path = self._backup_path(character_id)
-        temp_path = file_path.with_suffix(".apply.tmp.json")
-
         self._validate_payload(character_id, merged, file_path)
         try:
-            temp_path.write_text(
-                json.dumps(merged, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
-            )
-            self._validate_payload(character_id, self._read_json(temp_path), temp_path)
-
-            backup_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(file_path, backup_path)
-            os.replace(temp_path, file_path)
+            pack_writer.write_payload(character_id=character_id, payload=merged, backup=True)
         except Exception as exc:
-            if temp_path.exists():
-                temp_path.unlink()
             if isinstance(exc, HTTPException):
                 raise
             raise HTTPException(
@@ -355,6 +340,7 @@ class PersonaReviewService:
             ) from exc
 
         character = character_service.get_character(character_id)
+        backup_path = self._backup_path(character_id)
         return {
             "status": "ok",
             "character": CharacterSummary(
@@ -368,32 +354,14 @@ class PersonaReviewService:
         }
 
     def rollback(self, character_id: str) -> Dict[str, Any]:
-        backup_path = self._backup_path(character_id)
-        file_path = self._character_path(character_id)
-        temp_path = file_path.with_suffix(".rollback.tmp.json")
-        if not backup_path.exists():
-            raise HTTPException(
-                status_code=404,
-                detail=f"Previous character backup does not exist: {backup_path}",
-            )
-
-        payload = self._read_json(backup_path)
-        self._validate_payload(character_id, payload, file_path)
         try:
-            temp_path.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
-            )
-            self._validate_payload(character_id, self._read_json(temp_path), temp_path)
-            os.replace(temp_path, file_path)
+            backup_path = pack_writer.restore_previous_backup(character_id)
         except Exception as exc:
-            if temp_path.exists():
-                temp_path.unlink()
             if isinstance(exc, HTTPException):
                 raise
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to rollback persona file {file_path}: {exc}",
+                detail=f"Failed to rollback persona file {self._character_path(character_id)}: {exc}",
             ) from exc
 
         character = character_service.get_character(character_id)
@@ -657,10 +625,10 @@ class PersonaReviewService:
             ) from exc
 
     def _character_path(self, character_id: str) -> Path:
-        return settings.data_dir / "character_packs" / character_id / CHARACTER_FILE
+        return character_service.character_path(character_id)
 
     def _backup_path(self, character_id: str) -> Path:
-        return settings.data_dir / "character_packs" / character_id / "backups" / "character.previous.json"
+        return character_service.backup_path(character_id)
 
     def _read_json(self, file_path: Path) -> Dict[str, Any]:
         try:

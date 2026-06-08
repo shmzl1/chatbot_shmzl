@@ -79,3 +79,14 @@ backend/data/character_packs/**/voice_refs/**/*.mp3
 backend/data/character_packs/**/voice_refs/**/*.flac
 backend/data/character_packs/*/backups/
 backend/data/voice_clean/
+
+# Character module local assets and safety backups
+backend/modules/characters/packs/*/backups/*
+!backend/modules/characters/packs/*/backups/.gitkeep
+backend/modules/characters/packs/.trash/*
+!backend/modules/characters/packs/.trash/.gitkeep
+backend/modules/characters/packs/*/voice_refs/**/*.wav
+backend/modules/characters/packs/*/voice_refs/**/*.mp3
+backend/modules/characters/packs/*/voice_refs/**/*.flac
+backend/modules/characters/packs/*/voice_refs/**/*.ogg
+backend/modules/characters/packs/*/voice_refs/**/*.m4a

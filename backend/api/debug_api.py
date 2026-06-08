@@ -31,7 +31,7 @@ def export_debug_data() -> JSONResponse:
 
 @router.get("/characters")
 def debug_characters() -> JSONResponse:
-    return JSONResponse(content={"characters": character_service.validate_all_packs()})
+    return JSONResponse(content=character_service.debug_all_characters())
 
 
 @router.get("/characters/{character_id}")
