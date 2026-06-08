@@ -2,16 +2,16 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.auth_api import router as auth_router
-from api.chat_api import router as chat_router
-from api.character_api import router as character_router
-from api.debug_api import router as debug_router
-from api.feedback_api import router as feedback_router
-from api.health_api import router as health_router
-from api.knowledge_api import router as knowledge_router
-from api.memory_api import router as memory_router
-from api.voice_api import router as voice_router
 from core.config import settings
+from modules.auth.api import router as auth_router
+from modules.chat.api import router as chat_router
+from modules.characters.api import router as character_router
+from modules.debug.api import router as debug_router
+from modules.health.api import router as health_router
+from modules.knowledge.api import router as knowledge_router
+from modules.memory.api import router as memory_router
+from modules.persona_review.api import router as feedback_router
+from modules.voice.api import router as voice_router
 from services.database_service import database_service
 
 

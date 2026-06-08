@@ -1,5 +1,66 @@
 # Local Role Voice Chatbot
 
+## 后端模块结构
+
+后端开始采用 `backend/modules` 按功能域组织代码。当前是兼容式迁移：
+旧的 `backend/api` 和 `backend/services` 仍然保留，已有功能先通过
+`modules/{feature}/api.py` wrapper 接入，避免一次性移动大量业务代码。
+
+当前主应用从这些模块导入 router：
+
+```text
+modules.health.api
+modules.auth.api
+modules.characters.api
+modules.chat.api
+modules.debug.api
+modules.persona_review.api
+modules.knowledge.api
+modules.memory.api
+modules.voice.api
+```
+
+新功能优先新增到 `backend/modules/{feature}/`，再逐步拆出该功能自己的
+`api.py`、`service.py`、`repository.py` 和 `schemas.py`。不要继续把新功能
+直接塞进旧的 `backend/api` 或 `backend/services`。
+
+`schedule` 和 `diary` 目前只是预留模块，还没有业务实现，也没有在
+`backend/main.py` 中注册 router。
+
+## 功能域与共享关系记忆
+
+`chat`、`schedule`、`diary` 是三个独立业务功能：
+
+- `chat` 保存自由聊天会话和消息。
+- `schedule` 未来保存日程计划、日程项、日程复盘和日程反馈。
+- `diary` 未来保存日记、日记阅读会话和日记阅读对话。
+
+它们不共享业务会话表。`schedule` 和 `diary` 不能写入
+`chat_sessions` 或 `chat_turns`，也不能互相依赖。
+
+但用户不是在和三个互不认识的工具交互，而是在不同场景里和同一个角色交流。
+因此三类功能未来可以通过 `relationship_memory` 共享“同一个角色对用户的长期理解”。
+
+`relationship_memory` 不是普通聊天表，不是日程表，也不是日记表。它保存的是：
+
+```text
+某个角色对用户的长期理解
+```
+
+未来写入方向：
+
+- `chat` 从普通聊天中提取用户偏好、边界、情绪状态和长期习惯。
+- `schedule` 从日程安排和复盘中提取拖延模式、压力来源和任务习惯。
+- `diary` 从日记阅读中提取近期生活事件、孤独感、情绪变化和关注点。
+
+未来读取方向：
+
+- `chat` 生成回复时读取 `relationship_memory`。
+- `schedule` 生成日程反馈时读取 `relationship_memory`。
+- `diary` 进行日记阅读对话时读取 `relationship_memory`。
+
+这样可以做到业务数据隔离，同时让同一个角色在不同场景里延续对用户的理解。
+
 ## 项目简介
 
 这是一个本地角色聊天机器人项目，用于调试角色卡、长期记忆、知识库检索、OpenAI 兼容模型接入、用户头像和角色头像展示。登录功能是本地单用户登录锁，只用于防止别人坐到你的电脑前直接打开 `http://127.0.0.1:8000/app/` 使用你的 chatbot；它不是公开网站级安全系统，也不包含多用户、管理员、找回密码或邮箱验证。

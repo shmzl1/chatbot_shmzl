@@ -1,0 +1,2 @@
+"""Future diary repository boundary."""
+

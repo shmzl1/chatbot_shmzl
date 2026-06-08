@@ -1,0 +1,2 @@
+"""Future schedule repository boundary."""
+

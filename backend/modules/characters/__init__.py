@@ -1,0 +1,2 @@
+"""Characters module wrapper."""
+
