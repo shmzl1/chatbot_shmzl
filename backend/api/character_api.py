@@ -4,7 +4,9 @@ from core.schemas import AvatarUploadResponse, CharacterCard, CharacterListRespo
 from core.schemas import (
     PersonaReviewApplyRequest,
     PersonaReviewChatRequest,
+    PersonaReviewChatResponse,
     PersonaReviewFinalizeRequest,
+    PersonaReviewFinalizeResponse,
     PersonaReviewSummarizeRequest,
 )
 from services.auth_service import get_current_user
@@ -74,12 +76,15 @@ def summarize_persona_review(
     return persona_review_service.summarize(character_id=character_id, limit=request.limit)
 
 
-@router.post("/characters/{character_id}/persona-review/chat")
+@router.post(
+    "/characters/{character_id}/persona-review/chat",
+    response_model=PersonaReviewChatResponse,
+)
 def chat_persona_review(
     character_id: str,
     request: PersonaReviewChatRequest,
     current_user: UserRecord = Depends(get_current_user),
-) -> dict:
+) -> PersonaReviewChatResponse:
     return persona_review_service.chat(
         character_id=character_id,
         selected_turns=request.selected_turns,
@@ -88,12 +93,15 @@ def chat_persona_review(
     )
 
 
-@router.post("/characters/{character_id}/persona-review/finalize")
+@router.post(
+    "/characters/{character_id}/persona-review/finalize",
+    response_model=PersonaReviewFinalizeResponse,
+)
 def finalize_persona_review(
     character_id: str,
     request: PersonaReviewFinalizeRequest,
     current_user: UserRecord = Depends(get_current_user),
-) -> dict:
+) -> PersonaReviewFinalizeResponse:
     return persona_review_service.finalize(
         character_id=character_id,
         selected_turns=request.selected_turns,

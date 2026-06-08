@@ -611,6 +611,7 @@ class PersonaReviewService:
                     "session_id": item.get("session_id"),
                     "user_message": user_message,
                     "assistant_message": assistant_message,
+                    "emotion": item.get("emotion"),
                 }
             )
         return normalized

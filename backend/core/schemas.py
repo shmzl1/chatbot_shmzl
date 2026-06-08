@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -73,10 +73,11 @@ class PersonaReviewSummarizeRequest(BaseModel):
 
 
 class PersonaReviewSelectedTurn(BaseModel):
-    turn_id: Optional[int] = None
-    session_id: Optional[str] = None
+    turn_id: Optional[Union[str, int]] = None
+    session_id: Optional[Union[str, int]] = None
     user_message: str = Field(..., min_length=1, max_length=4000)
     assistant_message: str = Field(..., min_length=1, max_length=4000)
+    emotion: Optional[str] = None
 
 
 class PersonaReviewHistoryMessage(BaseModel):
@@ -90,10 +91,25 @@ class PersonaReviewChatRequest(BaseModel):
     history: List[PersonaReviewHistoryMessage] = Field(default_factory=list)
 
 
+class PersonaReviewChatResponse(BaseModel):
+    reply: str
+    history: List[PersonaReviewHistoryMessage] = Field(default_factory=list)
+    suggested_tags: List[str] = Field(default_factory=list)
+    should_generate_final: bool = False
+
+
 class PersonaReviewFinalizeRequest(BaseModel):
     selected_turns: List[PersonaReviewSelectedTurn] = Field(default_factory=list)
     history: List[PersonaReviewHistoryMessage] = Field(default_factory=list)
     limit: int = Field(default=30, ge=1, le=100)
+
+
+class PersonaReviewFinalizeResponse(BaseModel):
+    main_issues: List[Any] = Field(default_factory=list)
+    revision_plan: List[Any] = Field(default_factory=list)
+    changed_fields: List[Any] = Field(default_factory=list)
+    preview_character_json: Dict[str, Any]
+    risk_notes: List[Any] = Field(default_factory=list)
 
 
 class PersonaReviewApplyRequest(BaseModel):
