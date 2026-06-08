@@ -1,49 +1,39 @@
 # Relationship Memory Module
 
-`relationship_memory` is the shared character relationship memory layer.
+## Module Responsibility
 
-It is not an ordinary chat table.
-It is not a schedule table.
-It is not a diary table.
+Future shared layer for durable understanding that one character has about the
+user across scenarios.
 
-It stores durable understanding that a specific character has about the user.
-Future chat, schedule, and diary features may all write meaningful insights to
-this layer, and may all read from it when generating character responses.
+## Not Responsible For
 
-## Future Writers
+It is not an ordinary chat table, not a schedule table, and not a diary table.
+It does not currently implement persistence.
 
-- `chat`: user preferences, boundaries, emotional state, and long-term habits
-  extracted from ordinary conversation.
-- `schedule`: procrastination patterns, pressure sources, task habits, and
-  completion review signals extracted from planning and review.
-- `diary`: recent life events, loneliness, emotional changes, and concerns
-  extracted from diary reading.
+## Future Public Interfaces
 
-## Future Readers
+- Collect insights from chat.
+- Collect insights from schedule review.
+- Collect insights from diary reading.
+- Provide relationship context for a character.
 
-- `chat` may read relationship memory when replying.
-- `schedule` may read relationship memory when giving schedule feedback.
-- `diary` may read relationship memory during diary-reading conversations.
+## Data Boundary
 
-## Future Table Sketch
+Future table sketch: `relationship_memory_events` with `character_id`,
+`source_type`, `source_id`, `memory_type`, `content`, `evidence`,
+`importance`, timestamps, and active state.
 
-Do not create this table in this migration. A future migration may add:
+## Allowed Dependencies
 
-`relationship_memory_events`
+Future chat/schedule/diary modules may call public relationship-memory services.
 
-Suggested fields:
+## Forbidden Dependencies
 
-- `id`
-- `character_id`
-- `source_type`: `chat`, `schedule`, or `diary`
-- `source_id`
-- `source_turn_id`
-- `memory_type`: `user_preference`, `habit`, `emotional_state`, `life_event`,
-  `boundary`, or `task_pattern`
-- `content`
-- `evidence`
-- `importance`
-- `created_at`
-- `updated_at`
-- `is_active`
+Must not store complete chat, schedule, or diary business records. Must not
+replace those modules' own tables.
+
+## Codex Notes
+
+This is a placeholder. Do not wire it into business flows or create migrations
+unless the user explicitly asks.
 

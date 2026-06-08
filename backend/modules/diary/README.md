@@ -1,24 +1,38 @@
 # Diary Module
 
-`diary` is an independent feature domain reserved for future diary writing and
-diary-reading conversations. It is intentionally not included in
-`backend/main.py` yet and exposes no endpoints in this migration.
+## Module Responsibility
 
-## Future Responsibility
+Reserved module for future diary entries, diary reading sessions, and
+character-specific diary conversations.
 
-- Let the user write diary entries.
-- Let the user choose a character.
-- Let the user select diary entries for the character to read.
-- Let the character participate in a conversation after reading.
-- Let different characters respond according to their own persona.
+## Not Responsible For
+
+Currently no business implementation. It does not own chat sessions, schedule
+plans, or character packs.
+
+## Future Public Interfaces
+
+Future routes may support diary entry management, selecting entries for a
+character to read, and diary-reading conversations.
 
 ## Data Boundary
 
-- `diary` will use its own tables, such as `diary_entries`,
-  `diary_reading_sessions`, and `diary_reading_turns`.
-- `diary` must not write to `chat_sessions` or `chat_turns`.
-- `diary` must not depend on `schedule`.
-- `diary` may write durable user-understanding signals through
-  `relationship_memory`.
-- `diary` may read `relationship_memory` when generating character replies.
+Future tables may include `diary_entries`, `diary_reading_sessions`, and
+`diary_reading_turns`. This module must not write to `chat_sessions` or
+`chat_turns`.
+
+## Allowed Dependencies
+
+May read characters through the characters module and later share insights
+through `relationship_memory`.
+
+## Forbidden Dependencies
+
+Must not import schedule repositories. Must not store diary reading turns as
+ordinary chat turns.
+
+## Codex Notes
+
+This module is placeholder-only. Do not implement diary business logic unless
+the user explicitly asks.
 

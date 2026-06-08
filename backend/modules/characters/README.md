@@ -1,100 +1,89 @@
 # Characters Module
 
-The character system is centralized in `backend/modules/characters`.
+## Module Responsibility
 
-## Directory Layout
+Owns the character/person system: character packs, templates, validation,
+create/update/delete/restore, avatar updates, and character-pack filesystem
+boundaries.
+
+## Not Responsible For
+
+Ordinary chat turns, persona feedback records, schedule data, diary data,
+memories, knowledge records, or voice synthesis execution.
+
+## Public Interfaces
+
+- `GET /characters`
+- `GET /characters/{character_id}`
+- `POST /characters`
+- `PATCH /characters/{character_id}`
+- `DELETE /characters/{character_id}`
+- `POST /characters/{character_id}/restore`
+- `POST /characters/{character_id}/avatar`
+- `GET /characters/{character_id}/validate`
+- CLI: `python -m tools.character_pack ...`
+
+## Internal File Responsibilities
+
+- `api.py`: character HTTP routes and persona-review route hosting.
+- `service.py`: character business operations.
+- `repository.py`: module paths: templates, packs, trash, backups.
+- `pack_loader.py`: read and parse `character.json`.
+- `pack_writer.py`: safe writes, backups, trash, restore.
+- `validator.py`: character-pack validation.
+- `schemas.py`: character module request/response models.
+
+## Data Boundary
+
+The only character data source is:
 
 ```text
-backend/modules/characters/
-  api.py
-  service.py
-  repository.py
-  schemas.py
-  pack_loader.py
-  pack_writer.py
-  validator.py
-  templates/
-    default_character.json
-  packs/
-    role01/
-      character.json
-      voice_refs/
-      backups/
-    .trash/
+backend/modules/characters/packs/{character_id}/character.json
 ```
 
-Public templates live in `backend/modules/characters/templates`.
-Each character lives in one directory under
-`backend/modules/characters/packs/{character_id}/`.
-
-`character.json` is the only required file in a character pack.
-Optional voice references live under that character's own `voice_refs/`
-directory. Safety backups live under that character's own `backups/`
-directory.
-
-The old `backend/data/character_packs` location is deprecated and has been
-removed from the project. New characters must not be added there.
-
-The default `role01` character has been migrated to:
+Templates live at:
 
 ```text
-backend/modules/characters/packs/role01/
+backend/modules/characters/templates/
 ```
+
+The project no longer uses `backend/data/character_packs`.
+
+`character.json` is not ignored by Git. Local voice files, `backups`, and
+`.trash` are ignored except for `.gitkeep` placeholders.
 
 ## CLI
 
-Create a character:
-
 ```powershell
 cd backend
-python -m tools.character_pack new asa_mitaka --name "三鹰朝"
-```
-
-Validate a character:
-
-```powershell
-python -m tools.character_pack validate asa_mitaka
-```
-
-List active and trashed characters:
-
-```powershell
 python -m tools.character_pack list
-```
-
-Delete a character safely:
-
-```powershell
+python -m tools.character_pack new asa_mitaka --name "三鹰朝"
+python -m tools.character_pack validate asa_mitaka
 python -m tools.character_pack delete asa_mitaka
-```
-
-Delete only moves the pack to `.trash`; it does not delete historical chat
-records.
-
-Restore a character:
-
-```powershell
 python -m tools.character_pack restore asa_mitaka
 ```
 
-## Debug
+Delete only moves a pack to:
 
 ```text
-GET /debug/characters
-GET /debug/characters/{character_id}
+backend/modules/characters/packs/.trash/
 ```
 
-Debug output includes pack paths, validation state, lore/dialogue/reaction
-counts, avatar and voice state, trash state, and backup state.
+It does not delete historical chat records.
 
-## API Boundary
+## Allowed Dependencies
 
-Character management routes live in `modules.characters.api`.
-Persona review still uses the same public routes, but reads and writes character
-packs through this module.
+May use core schemas/config, avatar service, database avatar map compatibility,
+and persona review service for hosted persona-review routes.
 
-Ordinary chat reads characters through this module as well. Retrieval uses the
-`lore`, `dialogues`, and `reactions` already loaded from each character pack.
+## Forbidden Dependencies
 
-Do not commit official avatars, voice recordings, model weights, or private
-local assets to GitHub. `character.json` is intentionally not ignored.
+Other modules must not build character-pack paths themselves. They should call
+the characters service or loader/writer helpers. This module must not write chat
+sessions, memories, knowledge records, schedule data, or diary data.
+
+## Codex Notes
+
+For character tasks, start here. Usually inspect `service.py`,
+`repository.py`, `pack_loader.py`, `pack_writer.py`, and `validator.py`.
+Do not reintroduce old `backend/data/character_packs`.

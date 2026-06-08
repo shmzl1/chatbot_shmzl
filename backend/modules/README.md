@@ -1,41 +1,65 @@
 # Backend Modules
 
-`backend/modules` is the feature-oriented entry point for new backend code.
-The legacy `backend/api` and `backend/services` packages remain in place while
-the project migrates gradually.
+`backend/modules` is the backend feature boundary for the virtual-character
+companion system. New backend work should start here instead of adding more
+logic to legacy flat packages.
 
-## Current Migration Pattern
+## Module List
 
-Existing features use thin wrapper modules first. For example,
-`modules.chat.api` imports and exposes the existing `api.chat_api.router`.
-This keeps public paths stable while giving new work a clearer home.
+- `auth`: local single-user login lock, token issuance, current-user lookup.
+- `chat`: ordinary character chat flow.
+- `characters`: character packs, character templates, avatars, validation, CLI-facing character management.
+- `persona_review`: persona feedback, persona editor discussion, preview, apply, and rollback flow.
+- `memory`: long-term memory records used by chat.
+- `knowledge`: knowledge items and retrieval support.
+- `voice`: GPT-SoVITS-facing voice synthesis.
+- `relationship_memory`: future shared character-understanding layer across scenarios.
+- `schedule`: reserved module for future schedule management.
+- `diary`: reserved module for future diary reading and diary conversations.
+- `debug`: local development/debug endpoints.
+- `health`: lightweight health checks.
+
+## File Roles
+
+- `api.py`: HTTP boundary only. Parse requests, call services, return responses.
+- `service.py`: business logic and orchestration.
+- `repository.py`: database or filesystem persistence boundary.
+- `schemas.py`: module-specific request/response models.
+- `README.md`: ownership, dependency rules, data boundary, and Codex guidance.
 
 ## Dependency Rules
 
-1. `chat`, `schedule`, and `diary` are peer feature domains.
-2. `chat` must not import `schedule`.
-3. `chat` must not import `diary`.
-4. `schedule` must not import `chat.repository`.
-5. `diary` must not import `chat.repository`.
-6. `schedule` must not import `diary`.
-7. `diary` must not import `schedule`.
-8. `schedule` and `diary` must not write to `chat_sessions` or `chat_turns`.
-9. `chat` must not write to future `schedule` or `diary` business tables.
-10. All three domains may read character packs through the `characters` module.
-11. All three domains may use shared LLM capabilities to generate replies.
-12. All three domains may share long-term understanding through `relationship_memory`.
-13. New features that affect a character's understanding of the user should write
-    to `relationship_memory`, not to unrelated chat tables.
+- Modules must not casually import another module's `repository.py`.
+- Cross-module calls should use the other module's public `service.py` API.
+- Shared utilities belong in `core` or a future shared module, not in an unrelated feature module.
+- Do not keep adding feature-specific SQL to one large shared service.
+- New features should get their own `backend/modules/{feature}` directory.
+- A bug in one module should usually be fixed in that module only.
+- Do not restore mock fallbacks or silent defaults.
 
-## Shared Relationship Memory
+## Chat, Schedule, Diary
 
-Business data stays isolated by feature domain:
+`chat`, `schedule`, and `diary` are peer business domains.
 
-- `chat` owns free-chat sessions and turns.
-- `schedule` will own plans, items, reviews, and schedule feedback.
+- `chat` owns ordinary chat sessions and turns.
+- `schedule` will own schedule plans, items, reviews, and schedule feedback.
 - `diary` will own diary entries, reading sessions, and reading turns.
 
-Meaningful long-term understanding can be shared through `relationship_memory`.
-That layer represents what the same character has learned about the same user
-across different scenarios.
+They do not share business conversation tables. Future `schedule` and `diary`
+code must not write to `chat_sessions` or `chat_turns`.
 
+The three domains may share durable character understanding through
+`relationship_memory`, so the same character can carry understanding of the user
+across different scenarios without mixing business data.
+
+## Character Access
+
+Character data is owned only by `characters`.
+
+Other modules should not build paths under `backend/modules/characters/packs`
+themselves. Use the public characters service or loader/writer helpers.
+
+## Adding A Module
+
+Copy `backend/modules/MODULE_TEMPLATE.md` into the new module README and fill in
+the boundaries before adding business logic.

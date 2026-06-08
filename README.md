@@ -343,6 +343,35 @@ POST /characters/{character_id}/persona-review/rollback
 backend/modules/characters/packs/{character_id}/backups/character.previous.json
 ```
 
+## 给 AI agent / Codex 的开发入口
+
+修改后端模块前，先读：
+
+```text
+docs/CODEX_GUIDE.md
+```
+
+修改架构、模块边界或跨模块数据流前，先读：
+
+```text
+docs/ARCHITECTURE.md
+backend/modules/README.md
+```
+
+修改某个模块前，优先只读对应模块文档：
+
+```text
+backend/modules/{module}/README.md
+```
+
+开发规则：
+
+- 不要无目的扫描全项目。
+- 不要跨模块乱改。
+- 不要直接 import 其他模块的 repository。
+- 不要运行 `uvicorn`、`docker compose`、`git commit`、`git push`，除非用户明确要求。
+- 轻量检查优先使用 `python -m compileall .`。
+
 ## 注意事项
 
 - 不要提交 `backend/.env`、根目录 `.env` 或任何 `.env.*` 本地配置。
