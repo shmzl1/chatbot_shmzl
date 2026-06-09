@@ -1,20 +1,10 @@
 # chat 模块
 
-`chat` 模块负责普通角色聊天。
+`chat` 负责普通角色聊天，接口路径保持 `/chat/text` 和 `/chat`。
 
-## 职责
+## LLM
 
-- 接收前端聊天请求。
-- 读取当前角色信息。
-- 调用检索、记忆和 LLM 相关服务。
-- 保存聊天会话和聊天轮次。
-- 返回角色文本回复和可选语音信息。
-
-## LLM profile
-
-普通聊天使用 `chat` profile。
-
-配置项为：
+普通聊天只使用 `chat` profile，只读取：
 
 - `CHAT_LLM_PROVIDER`
 - `CHAT_OPENAI_API_KEY`
@@ -23,27 +13,14 @@
 - `CHAT_OPENAI_TIMEOUT_SECONDS`
 - `CHAT_OPENAI_TEMPERATURE`
 
-普通聊天只读取 `CHAT_*` 配置。
-项目不保留旧 `OPENAI_*` 兼容机制。
-如果这些配置缺失，聊天接口会直接报错。
+`CHAT_LLM_PROVIDER` 只能是 `openai`。缺配置、请求失败、超时、JSON 非法都会直接报错。
 
-## 人物依赖
+本模块不读取旧 `OPENAI_*`，不读取 `LLM_PROVIDER`，不允许 `auto`、`mock` 或 `fallback`。风格检查不合格时直接失败，不做本地修复，不生成模拟回复。
 
-聊天所需的人物数据应通过 `modules.characters` 获取。
+## 角色依赖
 
-不要在本模块中拼接角色包路径。
-不要读取旧的 `backend/data/character_packs`。
+角色信息只通过 `modules.characters.service` 获取。
 
-## 边界
+## 语音
 
-本模块不负责人设修改。
-
-如果用户要修正角色设定，应走 `persona_review` 流程。
-
-## 注意事项
-
-- 不要改变普通聊天接口路径。
-- 不要静默吞掉角色包读取错误。
-- 不要在 LLM 失败后返回模拟角色回复。
-- 不要使用 `LLM_PROVIDER=auto` 或 mock provider。
-- 不要因为语音失败破坏文字聊天返回。
+普通聊天没有显式 emotion 选择时，语音合成使用默认 `neutral` 参考音频。

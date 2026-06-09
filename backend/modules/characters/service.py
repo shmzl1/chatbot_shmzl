@@ -145,7 +145,7 @@ class CharacterService:
     def resolve_pack_relative_path(self, character_id: str, configured_path: str) -> Path:
         return repository.resolve_pack_relative_path(character_id, configured_path)
 
-    def _validate_payload(
+    def validate_payload(
         self,
         *,
         payload: Dict[str, Any],
@@ -160,6 +160,21 @@ class CharacterService:
             file_path=file_path,
             errors=errors,
             warnings=[],
+        )
+
+    def _validate_payload(
+        self,
+        *,
+        payload: Dict[str, Any],
+        file_path: Path,
+        expected_id: str,
+        errors: List[str],
+    ) -> None:
+        self.validate_payload(
+            payload=payload,
+            file_path=file_path,
+            expected_id=expected_id,
+            errors=errors,
         )
 
     def _model_to_dict(self, character: CharacterCard) -> Dict[str, Any]:

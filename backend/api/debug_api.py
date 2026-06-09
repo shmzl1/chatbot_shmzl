@@ -13,7 +13,7 @@ from core.schemas import (
 from services.auth_service import get_current_user
 from modules.characters.service import character_service
 from services.database_service import database_service
-from services.persona_review_service import persona_review_service
+from modules.persona_review.service import persona_review_service
 
 
 router = APIRouter(prefix="/debug", tags=["debug"])

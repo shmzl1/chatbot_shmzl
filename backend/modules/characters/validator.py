@@ -138,13 +138,10 @@ def _validate_voice(
         errors.append(f"{file_path}: voice.speed_factor must be a number.")
 
     ref_audio_path = value.get("ref_audio_path")
-    prompt_text = value.get("prompt_text")
     if ref_audio_path:
         resolved_ref = _resolve_pack_path(str(ref_audio_path), pack_dir)
         if not resolved_ref.exists():
             errors.append(f"{file_path}: voice.ref_audio_path does not exist: {resolved_ref}")
-        if not str(prompt_text or "").strip():
-            errors.append(f"{file_path}: voice.prompt_text cannot be empty when voice.ref_audio_path is configured.")
 
 
 def _validate_collection_ids(

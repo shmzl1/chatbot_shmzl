@@ -15,12 +15,13 @@ class TTSService:
         *,
         character: CharacterCard,
         text: str,
-        emotion: str,
+        emotion: str | None = None,
     ) -> tuple[str, str]:
-        ref_audio_path, prompt_text = self._select_reference(character, emotion)
+        voice_emotion = self._normalize_emotion(emotion)
+        ref_audio_path, prompt_text = self._select_reference(character, voice_emotion)
         output_dir = settings.outputs_dir / "audio"
         output_dir.mkdir(parents=True, exist_ok=True)
-        filename = self._filename(character.id, emotion)
+        filename = self._filename(character.id, voice_emotion)
         output_path = output_dir / filename
 
         base_url = (character.voice.gptsovits_base_url or settings.gptsovits_base_url).rstrip("/")
@@ -74,36 +75,37 @@ class TTSService:
         return relative_path, f"/outputs/audio/{filename}"
 
     def _select_reference(self, character: CharacterCard, emotion: str) -> tuple[Path, str]:
-        if character.voice.ref_audio_path:
+        if emotion == "neutral" and character.voice.ref_audio_path:
             ref_audio_path = self._resolve_reference_path(character.voice.ref_audio_path, character.id)
-            if not ref_audio_path.exists():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Missing reference audio: {ref_audio_path}",
-                )
+            self._require_ref_audio(character.id, emotion, ref_audio_path)
             return ref_audio_path, str(character.voice.prompt_text or "").strip()
 
         pack_voice_dir = character_service.pack_dir(character.id) / "voice_refs"
         emotion_dir = pack_voice_dir / emotion
-        neutral_dir = pack_voice_dir / "neutral"
-
         ref_audio_path = emotion_dir / "ref_001.wav"
+        self._require_ref_audio(character.id, emotion, ref_audio_path)
+
         ref_text_path = emotion_dir / "ref_001.txt"
-        if not ref_audio_path.exists() and emotion != "neutral":
-            ref_audio_path = neutral_dir / "ref_001.wav"
-            ref_text_path = neutral_dir / "ref_001.txt"
-
-        if not ref_audio_path.exists():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Missing reference audio: {ref_audio_path}",
-            )
-
         prompt_text = ""
         if ref_text_path.exists():
             prompt_text = ref_text_path.read_text(encoding="utf-8").strip()
 
         return ref_audio_path, prompt_text
+
+    def _require_ref_audio(self, character_id: str, emotion: str, ref_audio_path: Path) -> None:
+        if ref_audio_path.exists():
+            return
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Missing GPT-SoVITS reference audio for character_id='{character_id}', "
+                f"emotion='{emotion}', ref_audio_path='{ref_audio_path}'."
+            ),
+        )
+
+    def _normalize_emotion(self, emotion: str | None) -> str:
+        value = str(emotion or "").strip()
+        return value or "neutral"
 
     def _resolve_reference_path(self, configured_path: str, character_id: str) -> Path:
         path = Path(configured_path)

@@ -1,6 +1,5 @@
-"""Voice service compatibility exports."""
+"""Voice service exports."""
 
 from services.tts_service import tts_service
 
 __all__ = ["tts_service"]
-

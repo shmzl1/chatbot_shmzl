@@ -1,27 +1,17 @@
 # voice 模块
 
-`voice` 模块负责可选语音能力。
+`voice` 负责 GPT-SoVITS 语音调用。
 
-## 职责
+## 参考音频
 
-- 读取当前角色的语音配置。
-- 调用 GPT-SoVITS 服务。
-- 返回生成的语音文件信息。
+`neutral` 是默认语音参考。没有明确选择 emotion 时使用 `neutral`。
 
-## 人物依赖
+用户明确选择 `angry`、`sad`、`happy` 等 emotion 时，必须存在该 emotion 的参考音频：
 
-语音配置来自角色包中的 `voice` 字段。
+```text
+backend/modules/characters/packs/{character_id}/voice_refs/{emotion}/ref_001.wav
+```
 
-如果 `ref_audio_path` 是相对路径，应相对于当前角色包目录解析。
+缺少参考音频时直接报错，错误会说明 `character_id`、`emotion` 和 `ref_audio_path`。不会退回 `neutral`。
 
-## 边界
-
-语音能力是可选能力。
-
-语音服务不可用时，不应破坏普通文字聊天。
-
-## 注意事项
-
-- 不要硬编码旧角色包路径。
-- 不要提交语音素材和模型权重。
-- 参考音频缺失时应返回明确错误。
+GPT-SoVITS 的 `prompt_text` 可以为空；缺少 `ref_001.txt` 时传空字符串。

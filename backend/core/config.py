@@ -76,7 +76,7 @@ def _optional_float_env(name: str) -> float | None:
 
 @dataclass(frozen=True)
 class Settings:
-    app_name: str = os.getenv("APP_NAME", "虚拟人物陪伴系统")
+    app_name: str = os.getenv("APP_NAME", "Virtual Character Companion System")
     app_version: str = os.getenv("APP_VERSION", "0.1.0")
     data_dir: Path = _data_dir()
     database_url: str = _database_url()
@@ -109,12 +109,6 @@ class Settings:
     avatar_max_size_mb: int = int(os.getenv("AVATAR_MAX_SIZE_MB", "5"))
 
     def get_llm_config(self, profile: str) -> dict:
-        legacy_provider = _optional_env("LLM_PROVIDER")
-        if legacy_provider and legacy_provider.lower() == "auto":
-            raise ValueError("不允许使用 LLM_PROVIDER=auto")
-        if legacy_provider and legacy_provider.lower() == "mock":
-            raise ValueError("不允许使用 mock 作为 LLM_PROVIDER")
-
         if profile == "chat":
             return {
                 "profile": profile,
