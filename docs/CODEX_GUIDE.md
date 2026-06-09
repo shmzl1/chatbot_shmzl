@@ -2,6 +2,30 @@
 
 本项目当前原则是只保留最新机制，错误必须暴露。
 
+## 中文 Markdown 编码规则
+
+中文 Markdown 文档必须按 UTF-8 读取和写入，包括根目录文档、`docs/` 下的说明文档和中文命名的 `.md` 文件。
+
+在 PowerShell 中读取中文 Markdown 时，禁止使用 `type`、`cat` 或不带编码参数的默认 `Get-Content`。这些命令可能受终端代码页或 PowerShell 默认编码影响，导致中文显示为乱码、`�` 或问号。
+
+推荐使用：
+
+```powershell
+Get-Content -Raw -Encoding UTF8 docs/CODEX_GUIDE.md
+```
+
+也可以使用 Python 显式指定 UTF-8：
+
+```python
+from pathlib import Path
+
+text = Path("docs/CODEX_GUIDE.md").read_text(encoding="utf-8")
+```
+
+写入中文 Markdown 时也必须显式使用 UTF-8。不要因为终端显示异常就判断文件已经损坏；应先用 UTF-8 方式重新读取，并检查编辑器编码和终端编码。
+
+如果读取结果中出现乱码、`�` 或异常问号，必须立即停止修改当前文档，重新按 UTF-8 读取原文件。不能根据乱码内容猜测、补写或改写文档，也不能把乱码保存回文件。
+
 ## 文件位置
 
 - 唯一 env 示例：`backend/.env.example`。
