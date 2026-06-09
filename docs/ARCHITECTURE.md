@@ -8,6 +8,8 @@
 
 ```text
 chatbot/
+  AGENTS.md
+  .editorconfig
   README.md
   .gitignore
   backend/
@@ -60,8 +62,17 @@ docker compose --project-directory . -f deploy/docker/docker-compose.yml ...
 frontend
   -> modules.chat.api
   -> modules.characters.service
-  -> retrieval / memory / chat LLM profile
+  -> retrieval / long_term_memories / relationship_memory / chat LLM profile
   -> database
+```
+
+关系记忆：
+
+```text
+frontend
+  -> modules.relationship_memory.api
+  -> modules.relationship_memory.service
+  -> relationship_memory_events
 ```
 
 人设编辑：
@@ -95,6 +106,12 @@ frontend
 ## JSON
 
 LLM JSON 使用严格 `json.loads`。后端不会从 Markdown 代码块或自然语言中截取 JSON，也不会自动修补非法 JSON。
+
+## 关系记忆
+
+`relationship_memory_events` 是关系长期上下文的最小闭环表。普通聊天会读取当前角色有效关系记忆并加入 prompt，但保留旧 `long_term_memories` 路径兼容。
+
+用户确认聊天中的记忆建议时，前端继续写入 `/memory`，同时写入 `/relationship-memory`。停用关系记忆通过 `is_active = false` 完成，不删除历史事件。
 
 ## GPT-SoVITS
 

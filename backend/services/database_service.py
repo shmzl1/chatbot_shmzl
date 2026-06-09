@@ -209,6 +209,9 @@ class DatabaseService:
             persona_feedback_row = connection.execute(
                 "SELECT COUNT(*) AS count FROM persona_turn_feedback"
             ).fetchone()
+            relationship_memory_row = connection.execute(
+                "SELECT COUNT(*) AS count FROM relationship_memory_events"
+            ).fetchone()
 
         return {
             "database_backend": "postgresql",
@@ -216,6 +219,9 @@ class DatabaseService:
             "session_count": int(session_row["count"]) if session_row else 0,
             "turn_count": int(turn_row["count"]) if turn_row else 0,
             "memory_count": int(memory_row["count"]) if memory_row else 0,
+            "relationship_memory_count": (
+                int(relationship_memory_row["count"]) if relationship_memory_row else 0
+            ),
             "knowledge_count": int(knowledge_row["count"]) if knowledge_row else 0,
             "feedback_count": int(feedback_row["count"]) if feedback_row else 0,
             "persona_feedback_count": (
@@ -674,6 +680,9 @@ class DatabaseService:
             persona_feedback = connection.execute(
                 "SELECT * FROM persona_turn_feedback ORDER BY id ASC"
             ).fetchall()
+            relationship_memory = connection.execute(
+                "SELECT * FROM relationship_memory_events ORDER BY id ASC"
+            ).fetchall()
             knowledge = connection.execute(
                 "SELECT * FROM knowledge_items ORDER BY id ASC"
             ).fetchall()
@@ -686,6 +695,7 @@ class DatabaseService:
             "knowledge": [self._plain_row(row) for row in knowledge],
             "feedback": [self._plain_row(row) for row in feedback],
             "persona_feedback": [self._plain_row(row) for row in persona_feedback],
+            "relationship_memory": [self._plain_row(row) for row in relationship_memory],
         }
 
     def create_knowledge(

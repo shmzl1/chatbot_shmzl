@@ -162,7 +162,7 @@ async function requestJson(url, options = {}) {
 function friendlyError(error) {
   const message = error?.message || String(error);
   if (message.includes("PostgreSQL is not ready")) {
-    return "数据库还没准备好。请确认 Docker Desktop 已启动，并已运行 docker compose --project-directory . -f deploy/docker/docker-compose.yml up -d postgres adminer。";
+    return "数据库还没准备好。请确认 Docker Desktop 已启动，并在项目根目录运行 docker compose --project-directory . -f deploy/docker/docker-compose.yml up -d postgres adminer。";
   }
   if (message.includes("Missing reference audio")) {
     return "还没有放入语音参考音频。可先关闭语音开关继续文字聊天。";
@@ -335,6 +335,7 @@ function renderDatabaseInfo(info) {
     <div class="database-row"><span>Sessions</span><strong>${escapeHtml(info.session_count ?? 0)}</strong></div>
     <div class="database-row"><span>Turns</span><strong>${escapeHtml(info.turn_count ?? 0)}</strong></div>
     <div class="database-row"><span>Memories</span><strong>${escapeHtml(info.memory_count ?? 0)}</strong></div>
+    <div class="database-row"><span>Relationship</span><strong>${escapeHtml(info.relationship_memory_count ?? 0)}</strong></div>
     <div class="database-row"><span>Knowledge</span><strong>${escapeHtml(info.knowledge_count ?? 0)}</strong></div>
     <div class="database-row"><span>Feedback</span><strong>${escapeHtml(info.feedback_count ?? 0)}</strong></div>
     <div class="database-row"><span>Persona</span><strong>${escapeHtml(info.persona_feedback_count ?? 0)}</strong></div>
@@ -1410,6 +1411,22 @@ async function saveSuggestion(index) {
       memory_type: suggestion.memory_type || "note",
       importance: Number(suggestion.importance || 5),
       tags: suggestion.tags || [],
+    }),
+  });
+  await requestJson("/relationship-memory", {
+    method: "POST",
+    body: JSON.stringify({
+      character_id: getCharacterId(),
+      source_type: "chat",
+      source_id: state.currentSessionId,
+      source_turn_id: state.currentTurnId,
+      content: suggestion.content,
+      memory_type: suggestion.memory_type || "note",
+      importance: Number(suggestion.importance || 5),
+      evidence: {
+        confirmed_from: "memory_suggestion",
+        tags: suggestion.tags || [],
+      },
     }),
   });
   state.memorySuggestions = state.memorySuggestions.filter((_, itemIndex) => itemIndex !== Number(index));

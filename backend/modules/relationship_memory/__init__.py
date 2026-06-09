@@ -1,2 +1,1 @@
-"""Shared relationship memory module placeholder."""
-
+"""Shared relationship memory module."""

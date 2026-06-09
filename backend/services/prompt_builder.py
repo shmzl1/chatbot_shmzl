@@ -57,6 +57,7 @@ def build_chat_prompt(
     dialogue_hits = retrieval_context.get("dialogues", [])
     reaction_hits = retrieval_context.get("reactions", [])
     memory_hits = retrieval_context.get("memories", [])
+    relationship_memory_hits = retrieval_context.get("relationship_memories", [])
     history = retrieval_context.get("history", [])
 
     return f"""请根据角色卡，为用户输入生成 3 个候选回复。
@@ -90,6 +91,9 @@ def build_chat_prompt(
 
 长期记忆：
 {_format_hits(memory_hits, ("content", "memory_type", "importance", "tags"))}
+
+关系长期上下文：
+{_format_hits(relationship_memory_hits, ("content", "memory_type", "importance", "source_type", "evidence"))}
 
 最近聊天历史：
 {_format_history(history)}

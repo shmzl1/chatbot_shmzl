@@ -13,6 +13,7 @@ from services.retrieval_service import retrieval_service
 from services.rewrite_service import rewrite_service
 from services.style_judge_service import style_judge_service
 from services.tts_service import tts_service
+from modules.relationship_memory.service import relationship_memory_service
 
 
 router = APIRouter(tags=["chat"])
@@ -67,7 +68,12 @@ def _run_chat(request: ChatTextRequest, voice: bool) -> ChatTextResponse:
         query=request.message,
         limit=settings.top_k_memory,
     )
+    relationship_memory_hits = relationship_memory_service.prompt_hits(
+        character_id=character.id,
+        limit=5,
+    )
     retrieval_context["memories"] = memory_hits
+    retrieval_context["relationship_memories"] = relationship_memory_hits
     retrieval_context["history"] = history
     prompt = build_chat_prompt(character, request.message, retrieval_context)
     generation = llm_service.generate_candidates(
@@ -124,6 +130,7 @@ def _run_chat(request: ChatTextRequest, voice: bool) -> ChatTextResponse:
         "audio_path": audio_path,
         **retrieval_service.used_ids(retrieval_context),
         "used_memories": [hit["id"] for hit in memory_hits],
+        "used_relationship_memories": [hit["id"] for hit in relationship_memory_hits],
         "history_count": len(history),
         "memory_suggestions": memory_suggestions,
         "style_judge": {

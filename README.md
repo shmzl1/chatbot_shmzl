@@ -6,6 +6,8 @@
 
 ```text
 chatbot/
+  AGENTS.md
+  .editorconfig
   README.md
   .gitignore
   backend/
@@ -136,6 +138,15 @@ POST /chat/text
 POST /chat
 ```
 
+关系记忆接口：
+
+```text
+POST /relationship-memory
+GET /relationship-memory?character_id=role01
+POST /relationship-memory/{event_id}/deactivate
+GET /relationship-memory/debug?character_id=role01
+```
+
 人设编辑接口路径保持不变：
 
 ```text
@@ -150,6 +161,12 @@ POST /characters/{character_id}/persona-review/rollback
 `finalize` 只接受模型输出 patch JSON。后端把 patch 合并到当前 `character.json`，生成 `preview_character_json`，校验通过后返回预览。
 
 `apply` 必须由用户确认后才写入。patch 不允许修改 `id`、`display_name`、`avatar_url`、`voice`、`gptsovits_base_url`、`ref_audio_path`、`prompt_text`。模型返回非法 JSON 时直接返回 502，不做自动修补。
+
+## 关系记忆
+
+`relationship_memory_events` 保存用户和角色之间的有效长期关系上下文。普通聊天仍兼容旧 `long_term_memories`，同时会把有效关系记忆加入聊天 prompt 的长期上下文。
+
+前端“确认记忆建议”时会继续写入旧长期记忆，并额外写入一条关系记忆事件，来源标记为 `chat`，记录会话和 turn 信息。停用关系记忆只会把 `is_active` 置为 `false`，不会删除历史事件。
 
 ## 语音规则
 

@@ -1,38 +1,52 @@
-"""Schemas for future shared relationship memory events."""
+"""Schemas for relationship memory events."""
 
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 
-class RelationshipMemorySourceType(str, Enum):
-    CHAT = "chat"
-    SCHEDULE = "schedule"
-    DIARY = "diary"
-
-
-class RelationshipMemoryType(str, Enum):
-    USER_PREFERENCE = "user_preference"
-    HABIT = "habit"
-    EMOTIONAL_STATE = "emotional_state"
-    LIFE_EVENT = "life_event"
-    BOUNDARY = "boundary"
-    TASK_PATTERN = "task_pattern"
-
-
-class RelationshipMemoryEventDraft(BaseModel):
-    character_id: str
-    source_type: RelationshipMemorySourceType
+class RelationshipMemoryCreateRequest(BaseModel):
+    character_id: str = Field(..., min_length=1, max_length=100)
+    source_type: str = Field(default="manual", min_length=1, max_length=50)
     source_id: Optional[str] = None
-    source_turn_id: Optional[str] = None
-    memory_type: RelationshipMemoryType
-    content: str
+    source_turn_id: Optional[int] = None
+    memory_type: str = Field(default="note", min_length=1, max_length=50)
+    content: str = Field(..., min_length=1, max_length=2000)
     evidence: Dict[str, Any] = Field(default_factory=dict)
     importance: int = Field(default=5, ge=1, le=10)
 
 
+class RelationshipMemoryEvent(BaseModel):
+    id: int
+    character_id: str
+    source_type: str
+    source_id: Optional[str] = None
+    source_turn_id: Optional[int] = None
+    memory_type: str
+    content: str
+    evidence: Dict[str, Any] = Field(default_factory=dict)
+    importance: int
+    is_active: bool
+    created_at: str
+    updated_at: str
+
+
+class RelationshipMemoryListResponse(BaseModel):
+    events: List[RelationshipMemoryEvent] = Field(default_factory=list)
+
+
+class RelationshipMemoryDeactivateResponse(BaseModel):
+    status: str
+    event: Optional[RelationshipMemoryEvent] = None
+
+
 class RelationshipMemoryContext(BaseModel):
     character_id: str
-    events: List[RelationshipMemoryEventDraft] = Field(default_factory=list)
+    events: List[RelationshipMemoryEvent] = Field(default_factory=list)
 
+
+class RelationshipMemoryDebugResponse(BaseModel):
+    character_id: Optional[str] = None
+    total_count: int = 0
+    active_count: int = 0
+    events: List[RelationshipMemoryEvent] = Field(default_factory=list)

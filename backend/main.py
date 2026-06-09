@@ -11,6 +11,7 @@ from modules.health.api import router as health_router
 from modules.knowledge.api import router as knowledge_router
 from modules.memory.api import router as memory_router
 from modules.persona_review.api import router as feedback_router
+from modules.relationship_memory.api import router as relationship_memory_router
 from modules.voice.api import router as voice_router
 from services.database_service import database_service
 
@@ -28,6 +29,7 @@ app.include_router(debug_router)
 app.include_router(feedback_router)
 app.include_router(knowledge_router)
 app.include_router(memory_router)
+app.include_router(relationship_memory_router)
 app.include_router(voice_router)
 
 

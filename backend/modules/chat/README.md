@@ -21,6 +21,10 @@
 
 角色信息只通过 `modules.characters.service` 获取。
 
+## 记忆上下文
+
+普通聊天同时读取旧 `long_term_memories` 和新的 `relationship_memory_events`。关系记忆只读取 `is_active = true` 的事件，并加入 prompt 的“关系长期上下文”。
+
 ## 语音
 
 普通聊天没有显式 emotion 选择时，语音合成使用默认 `neutral` 参考音频。

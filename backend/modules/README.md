@@ -7,6 +7,7 @@
 - `characters`：角色系统唯一入口。
 - `chat`：普通聊天入口，只使用 `CHAT_*`。
 - `persona_review`：人设编辑闭环，只使用 `PERSONA_EDITOR_*`。
+- `relationship_memory`：关系长期上下文，保存到 `relationship_memory_events`。
 - `voice`：GPT-SoVITS 语音调用。
 
 ## 当前原则

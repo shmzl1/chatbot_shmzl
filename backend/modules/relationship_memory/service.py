@@ -1,35 +1,92 @@
-"""Future shared relationship memory service boundary.
+"""Service for relationship memory events."""
 
-This module is intentionally not wired into existing business flows yet.
-Functions raise NotImplementedError so callers do not mistake the placeholder
-for a working persistence layer.
-"""
+from typing import Any, Dict, List, Optional
 
-from typing import Any
+from fastapi import HTTPException
 
-from modules.relationship_memory.schemas import RelationshipMemoryContext
-
-
-def collect_from_chat(*args: Any, **kwargs: Any) -> None:
-    """Collect relationship memory from ordinary chat in a future iteration."""
-
-    raise NotImplementedError("relationship_memory collection from chat is not implemented yet.")
+from modules.relationship_memory.repository import relationship_memory_repository
+from modules.relationship_memory.schemas import (
+    RelationshipMemoryContext,
+    RelationshipMemoryCreateRequest,
+    RelationshipMemoryEvent,
+)
 
 
-def collect_from_schedule(*args: Any, **kwargs: Any) -> None:
-    """Collect relationship memory from schedule planning or review later."""
+class RelationshipMemoryService:
+    def create(self, request: RelationshipMemoryCreateRequest) -> RelationshipMemoryEvent:
+        return relationship_memory_repository.create(request)
 
-    raise NotImplementedError("relationship_memory collection from schedule is not implemented yet.")
+    def list_active(
+        self,
+        *,
+        character_id: str,
+        limit: int = 100,
+    ) -> List[RelationshipMemoryEvent]:
+        return relationship_memory_repository.list_active(
+            character_id=character_id,
+            limit=limit,
+        )
+
+    def deactivate(self, event_id: int) -> RelationshipMemoryEvent:
+        event = relationship_memory_repository.deactivate(event_id)
+        if not event:
+            raise HTTPException(status_code=404, detail="relationship memory event not found")
+        return event
+
+    def debug(
+        self,
+        *,
+        character_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        return relationship_memory_repository.debug(character_id=character_id, limit=limit)
+
+    def get_context_for_character(
+        self,
+        *,
+        character_id: str,
+        limit: int = 20,
+    ) -> RelationshipMemoryContext:
+        return RelationshipMemoryContext(
+            character_id=character_id,
+            events=self.list_active(character_id=character_id, limit=limit),
+        )
+
+    def prompt_hits(self, *, character_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+        events = self.list_active(character_id=character_id, limit=limit)
+        return [
+            {
+                "id": f"relmem_{event.id}",
+                "source": "relationship_memory",
+                "score": event.importance,
+                "text": event.content,
+                "payload": {
+                    "id": event.id,
+                    "memory_type": event.memory_type,
+                    "content": event.content,
+                    "importance": event.importance,
+                    "source_type": event.source_type,
+                    "source_id": event.source_id,
+                    "source_turn_id": event.source_turn_id,
+                    "evidence": event.evidence,
+                },
+            }
+            for event in events
+        ]
 
 
-def collect_from_diary(*args: Any, **kwargs: Any) -> None:
-    """Collect relationship memory from diary reading sessions later."""
+relationship_memory_service = RelationshipMemoryService()
 
-    raise NotImplementedError("relationship_memory collection from diary is not implemented yet.")
+
+def collect_from_chat(*args: Any, **kwargs: Any) -> RelationshipMemoryEvent:
+    """Create a relationship memory event from chat-related input."""
+
+    if args and isinstance(args[0], RelationshipMemoryCreateRequest):
+        request = args[0]
+    else:
+        request = RelationshipMemoryCreateRequest(**kwargs)
+    return relationship_memory_service.create(request)
 
 
 def get_context_for_character(*args: Any, **kwargs: Any) -> RelationshipMemoryContext:
-    """Read shared relationship context for a character in a future iteration."""
-
-    raise NotImplementedError("relationship_memory context lookup is not implemented yet.")
-
+    return relationship_memory_service.get_context_for_character(*args, **kwargs)

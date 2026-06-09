@@ -210,6 +210,7 @@ class DatabaseInfoResponse(BaseModel):
     session_count: int
     turn_count: int
     memory_count: int = 0
+    relationship_memory_count: int = 0
     knowledge_count: int = 0
     feedback_count: int = 0
     persona_feedback_count: int = 0

@@ -35,6 +35,7 @@ text = Path("docs/CODEX_GUIDE.md").read_text(encoding="utf-8")
 - 启动/暂停脚本目录：`scripts/runtime/`。
 - 计划书唯一位置：`docs/计划书.md`。
 - Python 后端依赖文件唯一位置：`backend/requirements.txt`。
+- 关系记忆模块位置：`backend/modules/relationship_memory/`。
 - 不要恢复根目录 `requirements.txt`，不要把 `backend/requirements.txt` 复制到根目录。
 
 从项目根目录安装后端依赖时使用：
@@ -86,6 +87,14 @@ docker compose --project-directory . -f deploy/docker/docker-compose.yml ...
 普通聊天只走 `CHAT_*`。人设编辑只走 `PERSONA_EDITOR_*`。两个 provider 都只能是 `openai`。
 
 缺配置、模型失败、超时、JSON 解析失败都应直接报错，并说明 profile、model 和具体错误；错误信息不能包含 API Key。
+
+## relationship_memory
+
+关系记忆使用 `relationship_memory_events` 表。普通聊天读取有效关系记忆加入长期上下文，同时继续保留 `long_term_memories` 兼容。
+
+用户确认聊天记忆建议后，应同时写入旧 `/memory` 和新 `/relationship-memory`。停用关系记忆只更新 `is_active = false`，不要物理删除事件。
+
+当前阶段不要在 relationship_memory 中新增日程、日记、QQ/微信接入或云部署能力。
 
 ## 人设编辑
 
