@@ -162,7 +162,7 @@ async function requestJson(url, options = {}) {
 function friendlyError(error) {
   const message = error?.message || String(error);
   if (message.includes("PostgreSQL is not ready")) {
-    return "数据库还没准备好。请确认 Docker Desktop 已启动，并已运行 docker compose up -d。";
+    return "数据库还没准备好。请确认 Docker Desktop 已启动，并已运行 docker compose --project-directory . -f deploy/docker/docker-compose.yml up -d postgres adminer。";
   }
   if (message.includes("Missing reference audio")) {
     return "还没有放入语音参考音频。可先关闭语音开关继续文字聊天。";

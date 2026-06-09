@@ -2,7 +2,6 @@
 .env
 .env.*
 backend/.env
-!.env.example
 !backend/.env.example
 
 # Python environments and cache

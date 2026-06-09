@@ -1,9 +1,13 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0"
+set "SCRIPT_DIR=%~dp0"
+for %%I in ("%SCRIPT_DIR%..\..") do set "PROJECT_ROOT=%%~fI"
+set "COMPOSE_FILE=%PROJECT_ROOT%\deploy\docker\docker-compose.yml"
 
 echo.
 echo 虚拟人物陪伴系统 - 暂时暂停
+echo 项目目录：%PROJECT_ROOT%
+echo Compose 文件：%COMPOSE_FILE%
 echo.
 
 echo 正在停止监听 8000 的后端进程...
@@ -16,8 +20,8 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":9880" ^| findstr "LISTENING
     taskkill /PID %%p /F >nul 2>nul
 )
 
-echo 正在执行 docker compose stop，保留数据库数据...
-docker compose stop
+echo 正在执行 Docker Compose stop，保留数据库数据...
+docker compose --project-directory "%PROJECT_ROOT%" -f "%COMPOSE_FILE%" stop
 
 echo.
 echo 已暂时暂停。

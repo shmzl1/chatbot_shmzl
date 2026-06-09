@@ -2,16 +2,16 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-$ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
 $BackendDir = Join-Path $ProjectRoot "backend"
+$ComposeFile = Join-Path $ProjectRoot "deploy\docker\docker-compose.yml"
 $CondaEnvName = "3-chatbot"
 $Url = "http://127.0.0.1:8000/app/"
 $PostgresContainerName = "role-chatbot-postgres"
 
 function Fail {
-    param(
-        [string]$Message
-    )
+    param([string]$Message)
 
     Write-Host ""
     Write-Host $Message -ForegroundColor Yellow
@@ -20,9 +20,7 @@ function Fail {
 }
 
 function Test-PortInUse {
-    param(
-        [int]$Port
-    )
+    param([int]$Port)
 
     $Connection = Get-NetTCPConnection `
         -LocalPort $Port `
@@ -33,9 +31,7 @@ function Test-PortInUse {
 }
 
 function Test-CondaEnvExists {
-    param(
-        [string]$EnvName
-    )
+    param([string]$EnvName)
 
     $EnvList = conda env list 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -104,7 +100,7 @@ function Test-BackendDependencies {
         python -c "import fastapi; import uvicorn; import pydantic"
 
     if ($LASTEXITCODE -ne 0) {
-        Fail "后端依赖检查失败。请先在 backend 目录安装 requirements.txt。"
+        Fail "后端依赖检查失败。请执行：cd E:\my_software\chatbot\backend; conda activate 3-chatbot; python -m pip install -r requirements.txt"
     }
 }
 
@@ -113,6 +109,7 @@ Write-Host "虚拟人物陪伴系统 - 一键启动" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "项目目录: $ProjectRoot"
 Write-Host "后端目录: $BackendDir"
+Write-Host "Compose 文件: $ComposeFile"
 Write-Host "Conda 环境: $CondaEnvName"
 Write-Host ""
 
@@ -132,6 +129,10 @@ if (-not (Test-Path -LiteralPath $BackendDir)) {
     Fail "没有找到后端目录：$BackendDir"
 }
 
+if (-not (Test-Path -LiteralPath $ComposeFile)) {
+    Fail "没有找到 Docker Compose 文件：$ComposeFile"
+}
+
 if (Test-PortInUse -Port 8000) {
     Write-Host "端口 8000 已经被占用，可能后端已经在运行。" -ForegroundColor Yellow
     Write-Host "不会重复启动多个后端。"
@@ -141,11 +142,10 @@ if (Test-PortInUse -Port 8000) {
 }
 
 Write-Host "正在启动 Docker 数据库..."
-Set-Location -LiteralPath $ProjectRoot
-docker compose up -d postgres adminer
+docker compose --project-directory "$ProjectRoot" -f "$ComposeFile" up -d postgres adminer
 
 if ($LASTEXITCODE -ne 0) {
-    Fail "docker compose up -d postgres adminer 执行失败。请确认 Docker Desktop 正在运行。"
+    Fail "docker compose --project-directory `"$ProjectRoot`" -f `"$ComposeFile`" up -d postgres adminer 执行失败。请确认 Docker Desktop 正在运行。"
 }
 
 Wait-PostgresHealthy -ContainerName $PostgresContainerName
@@ -153,19 +153,23 @@ Test-BackendDependencies
 
 Write-Host ""
 Write-Host "提示：GPT-SoVITS 语音 API 不会自动启动。"
-Write-Host "如需语音，请单独启动 9880 API。不开语音时可继续文字聊天。"
+Write-Host "如需语音，请单独启动 9880 API。不启动语音时可以继续文字聊天。"
 Write-Host ""
 
 Write-Host "正在打开网页：$Url"
 Start-Process $Url
 
 Write-Host ""
-Write-Host "正在启动 FastAPI 后端。按 Ctrl+C 可停止当前后端进程。"
+Write-Host "正在打开新的 PowerShell 窗口启动 FastAPI 后端。"
 Write-Host "本脚本不会执行 docker compose down 或 docker compose down -v。"
 Write-Host ""
 
-Set-Location -LiteralPath $BackendDir
-conda run `
-    --no-capture-output `
-    -n $CondaEnvName `
-    python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+$BackendCommand = @"
+Set-Location -LiteralPath "$BackendDir"
+conda run --no-capture-output -n $CondaEnvName python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+Read-Host "后端进程已退出，按 Enter 关闭窗口"
+"@
+
+Start-Process powershell `
+    -WindowStyle Normal `
+    -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $BackendCommand
