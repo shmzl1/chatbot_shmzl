@@ -23,9 +23,10 @@
 - `CHAT_*`
 - `PERSONA_EDITOR_*`
 
-旧 `OPENAI_*` 只作为兼容配置。
-缺少最终有效配置时应直接报错。
+项目不保留旧 `OPENAI_*` 兼容机制。
+缺少 profile 自己的配置时应直接报错。
 
+不要使用 `LLM_PROVIDER=auto`。
 不要把 `mock` 作为 provider。
 不要在 LLM 失败后生成模拟角色回复。
 
@@ -91,6 +92,7 @@ python -m compileall .
 - 不删除数据库、聊天记录、记忆和知识库。
 - 不永久删除角色包。
 - 不绕过 `.trash` 删除人物。
-- 不启用 `LLM_PROVIDER=mock`。
+- 不启用 `LLM_PROVIDER=auto`。
+- 不启用 mock provider。
 - 不吞掉 LLM 请求或 JSON 解析错误。
 - 不把官方素材、语音和模型权重提交到 Git。

@@ -6,11 +6,15 @@ echo.
 echo 虚拟人物陪伴系统 - 彻底停止
 echo.
 
-echo 正在停止监听 8000 的 chatbot 后端进程...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+echo 正在停止监听 8000 的后端进程...
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8000" ^| findstr "LISTENING"') do (
+    taskkill /PID %%p /F >nul 2>nul
+)
 
 echo 正在停止监听 9880 的 GPT-SoVITS API 进程（如果存在）...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-NetTCPConnection -LocalPort 9880 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":9880" ^| findstr "LISTENING"') do (
+    taskkill /PID %%p /F >nul 2>nul
+)
 
 echo 正在执行 docker compose stop，保留数据库 volume...
 docker compose stop

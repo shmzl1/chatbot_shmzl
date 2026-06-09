@@ -126,6 +126,53 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 前端是 `frontend/simple_web` 下的简单网页。
 也可以使用项目根目录的 `run_app.bat` 或 `run_app.ps1` 辅助启动。
 
+## 一键启动和暂停脚本
+
+推荐双击项目根目录的 `run_app.bat` 启动系统。
+
+脚本分工：
+
+- `run_app.bat` 是 Windows 双击入口。
+- `run_app.ps1` 是实际启动逻辑。
+- `暂时暂停Chatbot.bat` 用于临时暂停本地服务。
+- `彻底停止Chatbot.bat` 用于更彻底释放 WSL 和 Docker 占用的内存。
+
+`run_app.bat` 会切换到脚本所在目录，
+然后用 `-ExecutionPolicy Bypass` 调用同目录的 `run_app.ps1`。
+
+`run_app.ps1` 会：
+
+- 启动 `postgres` 和 `adminer` 容器。
+- 等待 `role-chatbot-postgres` 变为 healthy。
+- 检查 `conda` 和 `3-chatbot` 环境。
+- 检查后端基础依赖。
+- 如果 8000 端口已被占用，只提示并打开已有页面。
+- 打开 `http://127.0.0.1:8000/app/`。
+- 使用 `conda run` 启动 FastAPI 后端。
+
+GPT-SoVITS 不会由启动脚本自动启动。
+如需语音功能，请单独启动 9880 API。
+
+`暂时暂停Chatbot.bat` 会停止：
+
+- 监听 8000 的后端进程。
+- 监听 9880 的 GPT-SoVITS API 进程。
+- Docker Compose 当前项目容器。
+
+它只执行 `docker compose stop`，会保留数据库 volume 和聊天数据。
+
+`彻底停止Chatbot.bat` 会在上述暂停动作之外执行：
+
+```powershell
+wsl --shutdown
+```
+
+这会关闭所有 WSL，包括 Docker Desktop 后端和其他 WSL 终端，
+适合需要更彻底释放内存时使用。
+
+所有启动/暂停脚本都使用 UTF-8 编码，并保持正常多行换行。
+所有脚本都不能执行 `docker compose down -v`。
+
 ## LLM 模型配置
 
 普通聊天和人设编辑现在使用两套模型配置。
@@ -134,10 +181,10 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 
 ```env
 CHAT_LLM_PROVIDER="openai"
-CHAT_OPENAI_API_KEY="your_api_key_here"
+CHAT_OPENAI_API_KEY=""
 CHAT_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
-CHAT_OPENAI_MODEL="your_chat_model_here"
-CHAT_OPENAI_TIMEOUT_SECONDS="60"
+CHAT_OPENAI_MODEL="doubao-seed-character-251128"
+CHAT_OPENAI_TIMEOUT_SECONDS="120"
 CHAT_OPENAI_TEMPERATURE="0.8"
 ```
 
@@ -145,11 +192,11 @@ CHAT_OPENAI_TEMPERATURE="0.8"
 
 ```env
 PERSONA_EDITOR_LLM_PROVIDER="openai"
-PERSONA_EDITOR_OPENAI_API_KEY="your_api_key_here"
+PERSONA_EDITOR_OPENAI_API_KEY=""
 PERSONA_EDITOR_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
-PERSONA_EDITOR_OPENAI_MODEL="your_persona_editor_model_here"
-PERSONA_EDITOR_OPENAI_TIMEOUT_SECONDS="60"
-PERSONA_EDITOR_OPENAI_TEMPERATURE="0.3"
+PERSONA_EDITOR_OPENAI_MODEL="doubao-seed-2-0-pro-260215"
+PERSONA_EDITOR_OPENAI_TIMEOUT_SECONDS="180"
+PERSONA_EDITOR_OPENAI_TEMPERATURE="0.2"
 ```
 
 这样可以让普通聊天模型更偏角色表达和人设还原，
@@ -157,10 +204,14 @@ PERSONA_EDITOR_OPENAI_TEMPERATURE="0.3"
 
 两套配置可以使用同一个 API Key，也可以指向不同模型。
 
-如果新配置没有填写，系统会按兼容策略读取旧 `OPENAI_*` 配置。
-如果最终有效配置仍缺少 API Key、Base URL 或 Model，接口会直接报错。
+项目不保留旧 `OPENAI_*` 兼容机制。
+普通聊天不会读取人设编辑模型配置。
+人设编辑也不会读取普通聊天模型配置。
 
-不允许使用 `LLM_PROVIDER=mock`。
+如果 `CHAT_*` 或 `PERSONA_EDITOR_*` 缺少必需项，接口会直接报错。
+
+项目不使用 `LLM_PROVIDER=auto`。
+项目不允许 `mock` provider。
 
 ## 无静默兜底策略
 

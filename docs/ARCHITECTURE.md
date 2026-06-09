@@ -103,12 +103,13 @@ LLM 底层继续使用 OpenAI-compatible client。
 - `chat`：读取 `CHAT_*` 配置。
 - `persona_editor`：读取 `PERSONA_EDITOR_*` 配置。
 
-如果新配置没有填写，系统会兼容读取旧 `OPENAI_*` 配置。
+项目不保留旧 `OPENAI_*` 兼容机制。
 
-如果最终有效配置缺少 API Key、Base URL 或 Model，
+如果当前 profile 缺少 API Key、Base URL 或 Model，
 接口会直接返回明确错误。
 
-不允许使用 `LLM_PROVIDER=mock`。
+不使用 `LLM_PROVIDER=auto`。
+不允许 mock provider。
 模型失败后不会返回模拟角色回复。
 
 ## 数据库存储

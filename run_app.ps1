@@ -1,25 +1,116 @@
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendDir = Join-Path $ProjectRoot "backend"
 $CondaEnvName = "3-chatbot"
 $Url = "http://127.0.0.1:8000/app/"
+$PostgresContainerName = "role-chatbot-postgres"
 
-function Fail($Message) {
+function Fail {
+    param(
+        [string]$Message
+    )
+
     Write-Host ""
     Write-Host $Message -ForegroundColor Yellow
     Write-Host ""
-    Read-Host "按 Enter 退出"
     exit 1
 }
 
-function Test-PortInUse($Port) {
-    $connection = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
-    return $null -ne $connection
+function Test-PortInUse {
+    param(
+        [int]$Port
+    )
+
+    $Connection = Get-NetTCPConnection `
+        -LocalPort $Port `
+        -State Listen `
+        -ErrorAction SilentlyContinue
+
+    return $null -ne $Connection
+}
+
+function Test-CondaEnvExists {
+    param(
+        [string]$EnvName
+    )
+
+    $EnvList = conda env list 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        return $false
+    }
+
+    foreach ($Line in $EnvList) {
+        if ($Line -match "^\s*\*?\s*$([regex]::Escape($EnvName))\s+") {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Wait-PostgresHealthy {
+    param(
+        [string]$ContainerName,
+        [int]$TimeoutSeconds = 60
+    )
+
+    Write-Host "正在等待 PostgreSQL 容器 healthy..."
+
+    $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $LastStatus = ""
+
+    while ((Get-Date) -lt $Deadline) {
+        $Status = docker inspect `
+            --format "{{.State.Health.Status}}" `
+            $ContainerName `
+            2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+            $LastStatus = "$Status".Trim()
+
+            if ($LastStatus -eq "healthy") {
+                Write-Host "PostgreSQL 容器已 healthy。"
+                return
+            }
+
+            if ($LastStatus -eq "unhealthy") {
+                Fail "PostgreSQL 容器状态为 unhealthy，请检查 Docker 日志。"
+            }
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    if (-not $LastStatus) {
+        $LastStatus = "unknown"
+    }
+
+    Fail "PostgreSQL 容器 $ContainerName 未在 $TimeoutSeconds 秒内变为 healthy，当前状态：$LastStatus"
+}
+
+function Test-BackendDependencies {
+    Write-Host "正在检查后端依赖..."
+
+    $RequirementsFile = Join-Path $BackendDir "requirements.txt"
+    if (-not (Test-Path -LiteralPath $RequirementsFile)) {
+        Fail "没有找到后端依赖文件：$RequirementsFile"
+    }
+
+    conda run `
+        -n $CondaEnvName `
+        python -c "import fastapi; import uvicorn; import pydantic"
+
+    if ($LASTEXITCODE -ne 0) {
+        Fail "后端依赖检查失败。请先在 backend 目录安装 requirements.txt。"
+    }
 }
 
 Write-Host ""
-Write-Host "虚拟人物陪伴系统" -ForegroundColor Cyan
+Write-Host "虚拟人物陪伴系统 - 一键启动" -ForegroundColor Cyan
+Write-Host ""
 Write-Host "项目目录: $ProjectRoot"
 Write-Host "后端目录: $BackendDir"
 Write-Host "Conda 环境: $CondaEnvName"
@@ -33,54 +124,48 @@ if (-not (Get-Command conda -ErrorAction SilentlyContinue)) {
     Fail "没有找到 conda 命令。请确认 Miniconda/Anaconda 已安装，并且 conda 在 PATH 中可用。"
 }
 
-if (Test-PortInUse 8000) {
+if (-not (Test-CondaEnvExists -EnvName $CondaEnvName)) {
+    Fail "没有找到 conda 环境：$CondaEnvName"
+}
+
+if (-not (Test-Path -LiteralPath $BackendDir)) {
+    Fail "没有找到后端目录：$BackendDir"
+}
+
+if (Test-PortInUse -Port 8000) {
     Write-Host "端口 8000 已经被占用，可能后端已经在运行。" -ForegroundColor Yellow
-    Write-Host "不会重复启动多个后端。正在打开现有页面：$Url"
+    Write-Host "不会重复启动多个后端。"
+    Write-Host "正在打开现有页面：$Url"
     Start-Process $Url
-    Read-Host "按 Enter 退出"
     exit 0
 }
 
-Write-Host "启动 Docker 数据库..."
+Write-Host "正在启动 Docker 数据库..."
 Set-Location -LiteralPath $ProjectRoot
-docker compose up -d
+docker compose up -d postgres adminer
+
 if ($LASTEXITCODE -ne 0) {
-    Fail "docker compose up -d 执行失败。请确认 Docker Desktop 正在运行。"
+    Fail "docker compose up -d postgres adminer 执行失败。请确认 Docker Desktop 正在运行。"
 }
+
+Wait-PostgresHealthy -ContainerName $PostgresContainerName
+Test-BackendDependencies
 
 Write-Host ""
 Write-Host "提示：GPT-SoVITS 语音 API 不会自动启动。"
 Write-Host "如需语音，请单独启动 9880 API。不开语音时可继续文字聊天。"
 Write-Host ""
 
-$BackendCommand = @"
-`$ErrorActionPreference = 'Stop'
-chcp 65001 >`$null
-Set-Location -LiteralPath '$BackendDir'
-Write-Host '虚拟人物陪伴系统后端'
-Write-Host '正在激活 conda 环境 $CondaEnvName...'
-conda shell.powershell hook | Out-String | Invoke-Expression
-conda activate $CondaEnvName
-if (`$LASTEXITCODE -ne 0) { throw 'conda activate $CondaEnvName 失败' }
-Write-Host '安装/检查 Python 依赖...'
-python -m pip install -r requirements.txt
-if (`$LASTEXITCODE -ne 0) { throw '依赖安装失败' }
-Write-Host '启动 FastAPI: http://127.0.0.1:8000/app/'
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
-"@
-
-Write-Host "正在新 PowerShell 窗口启动后端..."
-Start-Process powershell -ArgumentList @(
-    "-NoProfile",
-    "-ExecutionPolicy", "Bypass",
-    "-NoExit",
-    "-Command", $BackendCommand
-)
-
-Start-Sleep -Seconds 2
 Write-Host "正在打开网页：$Url"
 Start-Process $Url
 
 Write-Host ""
-Write-Host "启动命令已发出。后端日志请看新打开的 PowerShell 窗口。"
+Write-Host "正在启动 FastAPI 后端。按 Ctrl+C 可停止当前后端进程。"
 Write-Host "本脚本不会执行 docker compose down 或 docker compose down -v。"
+Write-Host ""
+
+Set-Location -LiteralPath $BackendDir
+conda run `
+    --no-capture-output `
+    -n $CondaEnvName `
+    python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
