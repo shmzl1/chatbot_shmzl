@@ -338,7 +338,13 @@ class PersonaReviewService:
 - 不要输出完整 character.json。
 - 只输出 patch。
 - patch 不能包含禁止字段。
+- patch 不能使用 dialogues、reactions、bad_examples、revision_notes 作为 key。
+- 新增 dialogue 只能写 dialogues_append。
+- 新增 reaction 只能写 reactions_append。
+- 新增 bad example 只能写 bad_examples_append。
+- 新增 revision note 只能写 revision_note。
 - patch 里只能使用 revision_note，不能使用 revision_notes。
+- dialogues_append、reactions_append、bad_examples_append 的每个新增 item 不能包含 id，后端会自动生成。
 - 不要修改 id、display_name、avatar_url、voice、gptsovits_base_url、ref_audio_path、prompt_text。
 - 优先允许修改 style_contract、speaking_style、forbidden、dialogues、reactions、bad_examples、evaluation_criteria、revision_notes。
 - 不要删除已有有效 dialogues，可以新增更符合人设的 dialogues。
@@ -671,6 +677,7 @@ class PersonaReviewService:
             "revision_note": self._nullable_dict(
                 patch.get("revision_note"),
                 "patch.revision_note",
+                strip_id=True,
             ),
         }
 
@@ -849,7 +856,9 @@ class PersonaReviewService:
                     status_code=502,
                     detail=f"Persona finalize field '{field_name}' items must be objects.",
                 )
-            protected_keys = sorted(set(item) & PATCH_PROTECTED_FIELDS)
+            normalized_item = dict(item)
+            normalized_item.pop("id", None)
+            protected_keys = sorted(set(normalized_item) & PATCH_PROTECTED_FIELDS)
             if protected_keys:
                 raise HTTPException(
                     status_code=502,
@@ -858,10 +867,16 @@ class PersonaReviewService:
                         f"{', '.join(protected_keys)}"
                     ),
                 )
-            result.append(dict(item))
+            if normalized_item:
+                result.append(normalized_item)
         return result
 
-    def _nullable_dict(self, value: Any, field_name: str) -> Dict[str, Any] | None:
+    def _nullable_dict(
+        self,
+        value: Any,
+        field_name: str,
+        strip_id: bool = False,
+    ) -> Dict[str, Any] | None:
         if value is None:
             return None
         if not isinstance(value, dict):
@@ -869,7 +884,10 @@ class PersonaReviewService:
                 status_code=502,
                 detail=f"Persona finalize field '{field_name}' must be an object or null.",
             )
-        protected_keys = sorted(set(value) & PATCH_PROTECTED_FIELDS)
+        normalized_value = dict(value)
+        if strip_id:
+            normalized_value.pop("id", None)
+        protected_keys = sorted(set(normalized_value) & PATCH_PROTECTED_FIELDS)
         if protected_keys:
             raise HTTPException(
                 status_code=502,
@@ -878,7 +896,7 @@ class PersonaReviewService:
                     f"{', '.join(protected_keys)}"
                 ),
             )
-        return dict(value)
+        return normalized_value
 
     def _changed_fields(self, value: Any) -> List[str]:
         raw_fields = self._string_list(value, "changed_fields")
