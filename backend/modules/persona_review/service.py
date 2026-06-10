@@ -55,6 +55,13 @@ PATCH_APPEND_FIELD_MAP = {
     "reactions_append": ("reactions", "reaction"),
     "bad_examples_append": ("bad_examples", "bad_example"),
 }
+PATCH_CHANGED_FIELD_MAP = {
+    "dialogues_append": "dialogues",
+    "reactions_append": "reactions",
+    "bad_examples_append": "bad_examples",
+    "evaluation_criteria_append": "evaluation_criteria",
+    "revision_note": "revision_notes",
+}
 MAX_FINALIZE_TURNS = 5
 MAX_FINALIZE_HISTORY = 10
 MAX_PATCH_ITEMS = 5
@@ -334,6 +341,9 @@ class PersonaReviewService:
 - 不要生成非法 JSON。
 - 不要声称已经写入文件。
 - main_issues、revision_plan、risk_notes 最多各 5 条。
+- changed_fields 只能写真实 character.json 字段，不能写 patch 字段名。
+- changed_fields 正确示例：["dialogues", "bad_examples", "revision_notes"]。
+- changed_fields 错误示例：["dialogues_append", "bad_examples_append", "revision_note"]。
 - dialogues_append、reactions_append、bad_examples_append、evaluation_criteria_append 最多各 5 条。
 - {sample_policy}
 
@@ -829,12 +839,24 @@ class PersonaReviewService:
         return dict(value)
 
     def _changed_fields(self, value: Any) -> List[str]:
-        fields = self._string_list(value, "changed_fields")
-        invalid = sorted(set(fields) - ALLOWED_REVIEW_FIELDS)
+        raw_fields = self._string_list(value, "changed_fields")
+        fields: List[str] = []
+        invalid: List[str] = []
+        for field in raw_fields:
+            normalized = PATCH_CHANGED_FIELD_MAP.get(field, field)
+            if normalized in ALLOWED_REVIEW_FIELDS:
+                if normalized not in fields:
+                    fields.append(normalized)
+            else:
+                invalid.append(field)
+
         if invalid:
             raise HTTPException(
                 status_code=502,
-                detail=f"Persona finalize changed_fields contains unsupported fields: {', '.join(invalid)}",
+                detail=(
+                    "Persona finalize changed_fields contains unsupported fields: "
+                    f"{', '.join(sorted(set(invalid)))}"
+                ),
             )
         return fields
 
