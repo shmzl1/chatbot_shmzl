@@ -55,12 +55,16 @@ PATCH_APPEND_FIELD_MAP = {
     "reactions_append": ("reactions", "reaction"),
     "bad_examples_append": ("bad_examples", "bad_example"),
 }
+PATCH_KEY_ALIAS_MAP = {
+    "revision_notes": "revision_note",
+}
 PATCH_CHANGED_FIELD_MAP = {
     "dialogues_append": "dialogues",
     "reactions_append": "reactions",
     "bad_examples_append": "bad_examples",
     "evaluation_criteria_append": "evaluation_criteria",
     "revision_note": "revision_notes",
+    "revision_notes": "revision_notes",
 }
 MAX_FINALIZE_TURNS = 5
 MAX_FINALIZE_HISTORY = 10
@@ -334,6 +338,7 @@ class PersonaReviewService:
 - 不要输出完整 character.json。
 - 只输出 patch。
 - patch 不能包含禁止字段。
+- patch 里只能使用 revision_note，不能使用 revision_notes。
 - 不要修改 id、display_name、avatar_url、voice、gptsovits_base_url、ref_audio_path、prompt_text。
 - 优先允许修改 style_contract、speaking_style、forbidden、dialogues、reactions、bad_examples、evaluation_criteria、revision_notes。
 - 不要删除已有有效 dialogues，可以新增更符合人设的 dialogues。
@@ -619,6 +624,7 @@ class PersonaReviewService:
                 status_code=502,
                 detail="Persona finalize JSON must include patch object.",
             )
+        patch = self._normalize_patch_aliases(patch)
 
         illegal_patch_keys = sorted(set(patch) - PATCH_ALLOWED_KEYS)
         protected_keys = sorted(set(patch) & PATCH_PROTECTED_FIELDS)
@@ -675,6 +681,42 @@ class PersonaReviewService:
             "patch": normalized_patch,
             "risk_notes": risk_notes,
         }
+
+    def _normalize_patch_aliases(self, patch: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = dict(patch)
+        for alias, target in PATCH_KEY_ALIAS_MAP.items():
+            if alias not in normalized:
+                continue
+            if target in normalized and normalized[target] is not None:
+                del normalized[alias]
+                continue
+
+            value = normalized[alias]
+            if isinstance(value, dict):
+                normalized[target] = value
+            elif isinstance(value, list):
+                dict_items = [item for item in value if isinstance(item, dict)]
+                if dict_items:
+                    normalized[target] = dict_items[-1]
+                elif value:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Persona finalize patch field '{alias}' must contain revision note objects.",
+                    )
+                else:
+                    normalized[target] = None
+            elif isinstance(value, str):
+                text = value.strip()
+                normalized[target] = {"summary": text} if text else None
+            elif value is None:
+                normalized[target] = None
+            else:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Persona finalize patch field '{alias}' has unsupported type.",
+                )
+            del normalized[alias]
+        return normalized
 
     def _merge_persona_patch(
         self,
