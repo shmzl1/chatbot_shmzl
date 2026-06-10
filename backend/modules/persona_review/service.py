@@ -153,7 +153,7 @@ class PersonaReviewService:
                 "不能声称已经写入文件。你必须只输出严格 JSON。"
             ),
             profile="persona_editor",
-            strict_json=True,
+            strict_json=False,
         )
         current_payload = self._model_to_dict(character)
         review = self._normalize_finalize_patch_review(review)

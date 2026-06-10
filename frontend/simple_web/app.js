@@ -161,6 +161,7 @@ async function requestJson(url, options = {}) {
 
 function friendlyError(error) {
   const message = error?.message || String(error);
+  const lowerMessage = message.toLowerCase();
   if (message.includes("PostgreSQL is not ready")) {
     return "数据库还没准备好。请确认 Docker Desktop 已启动，并在项目根目录运行 docker compose --project-directory . -f deploy/docker/docker-compose.yml up -d postgres adminer。";
   }
@@ -169,6 +170,15 @@ function friendlyError(error) {
   }
   if (message.includes("GPT-SoVITS")) {
     return "语音服务暂时不可用。可先关闭语音开关继续文字聊天。";
+  }
+  if (
+    message.includes("LLM request failed") &&
+    (lowerMessage.includes("response_format") ||
+      lowerMessage.includes("json_object") ||
+      lowerMessage.includes("unsupported") ||
+      lowerMessage.includes("badrequest"))
+  ) {
+    return `AI 接口调用失败：当前模型可能不支持 JSON mode / response_format。后端详情：${message}`;
   }
   if (message.includes("LLM request failed")) {
     return "AI 接口调用失败。请检查 API Key、模型名或网络连接。";

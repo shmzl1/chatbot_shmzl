@@ -89,16 +89,117 @@ conda activate 3-chatbot
 python -m pip install -r requirements.txt
 ```
 
-## 启动
+## 启动方式
 
-启动数据库：
+本项目当前为本地单用户运行方式，主要包含：
+
+* FastAPI 后端
+* PostgreSQL 数据库
+* Adminer 数据库管理页面
+* `frontend/simple_web` 简单网页前端
+
+网页入口：
+
+```text
+http://127.0.0.1:8000/app/
+```
+
+---
+
+### 1. 首次准备环境
+
+进入项目根目录：
 
 ```powershell
 cd E:\my_software\chatbot
-docker compose --project-directory . -f deploy/docker/docker-compose.yml up -d postgres adminer
 ```
 
-启动后端：
+创建并激活 Conda 环境：
+
+```powershell
+conda create -n 3-chatbot python=3.10 -y
+conda activate 3-chatbot
+```
+
+安装后端依赖：
+
+```powershell
+cd backend
+pip install -r requirements.txt
+```
+
+---
+
+### 2. 配置环境变量
+
+复制环境变量示例文件：
+
+```powershell
+cd E:\my_software\chatbot
+copy .env.example backend\.env
+```
+
+然后打开：
+
+```text
+backend/.env
+```
+
+至少检查并填写以下配置：
+
+```env
+DATABASE_URL="postgresql://chatbot:change_me_local_only@127.0.0.1:5432/role_chatbot"
+
+CHAT_LLM_PROVIDER="openai"
+CHAT_OPENAI_API_KEY="your_api_key_here"
+CHAT_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
+CHAT_OPENAI_MODEL="your_chat_model_here"
+
+PERSONA_EDITOR_LLM_PROVIDER="openai"
+PERSONA_EDITOR_OPENAI_API_KEY="your_api_key_here"
+PERSONA_EDITOR_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
+PERSONA_EDITOR_OPENAI_MODEL="your_persona_editor_model_here"
+
+JWT_SECRET_KEY="change_this_to_a_long_random_string"
+```
+
+注意：
+
+* 不要把真实 API Key 提交到 Git。
+* 不要提交 `backend/.env`。
+* 如果不使用人设编辑功能，也建议先把 `PERSONA_EDITOR_*` 配好，避免调用相关接口时报错。
+* 本项目不使用 mock LLM。模型配置错误时会直接报错。
+
+---
+
+### 3. 启动数据库
+
+回到项目根目录：
+
+```powershell
+cd E:\my_software\chatbot
+docker compose --project-directory "E:\my_software\chatbot" -f "E:\my_software\chatbot\deploy\docker\docker-compose.yml" up -d postgres adminer
+```
+
+启动后：
+
+* PostgreSQL 地址：`127.0.0.1:5432`
+* 数据库名：`role_chatbot`
+* 用户名：`chatbot`
+* 密码：`change_me_local_only`
+* Adminer 地址：`http://127.0.0.1:8081`
+
+如果想查看容器状态：
+
+```powershell
+docker compose ps
+```
+
+---
+
+### 4. 启动后端
+
+进入后端目录：
 
 ```powershell
 cd E:\my_software\chatbot\backend
@@ -106,30 +207,100 @@ conda activate 3-chatbot
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-辅助启动脚本：
+启动成功后访问：
 
 ```text
-scripts/runtime/run_app.bat
-scripts/runtime/run_app.ps1
+http://127.0.0.1:8000/app/
 ```
 
-暂停数据库并保留数据：
+接口文档地址：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+健康检查地址：
+
+```text
+http://127.0.0.1:8000/health
+```
+
+---
+
+### 5. 一键启动方式
+
+项目根目录提供了辅助启动脚本。
+
+PowerShell 启动：
 
 ```powershell
 cd E:\my_software\chatbot
-docker compose --project-directory . -f deploy/docker/docker-compose.yml stop
+.\run_app.ps1
 ```
 
-辅助暂停脚本：
+或双击：
 
 ```text
-scripts/runtime/暂时暂停Chatbot.bat
-scripts/runtime/彻底停止Chatbot.bat
+run_app.bat
 ```
 
-`暂时暂停Chatbot.bat` 会停止端口并执行带 `--project-directory` 和 `-f` 参数的 Compose stop，保留数据。`彻底停止Chatbot.bat` 还会执行 `wsl --shutdown` 释放 WSL/Docker 内存，但不执行 `docker compose down`，不执行 `docker compose down -v`，不删除 PostgreSQL volume。
+一键启动脚本会尝试：
 
-## 接口路径
+1. 检查 Docker；
+2. 检查 Conda；
+3. 检查 `3-chatbot` 环境；
+4. 启动 PostgreSQL 和 Adminer；
+5. 等待 PostgreSQL healthy；
+6. 检查后端依赖；
+7. 打开 `http://127.0.0.1:8000/app/`；
+8. 启动 FastAPI 后端。
+
+如果端口 `8000` 已被占用，脚本会认为后端可能已经在运行，并直接打开网页。
+
+---
+
+### 6. GPT-SoVITS 语音服务
+
+GPT-SoVITS 语音 API 不会跟随后端自动启动。
+
+如果只使用文字聊天，可以不启动语音服务。
+
+如果需要语音功能，需要单独启动 GPT-SoVITS API，并保证 `.env` 中配置：
+
+```env
+GPTSOVITS_BASE_URL="http://127.0.0.1:9880"
+GPTSOVITS_TIMEOUT_SECONDS="120"
+```
+
+---
+
+### 7. 暂停和停止
+
+临时暂停后端：
+
+```text
+暂时暂停Chatbot.bat
+```
+
+彻底停止项目相关服务：
+
+```text
+彻底停止Chatbot.bat
+```
+
+如果手动停止 Docker 数据库：
+
+```powershell
+docker compose down
+```
+
+注意：
+
+```powershell
+docker compose down -v
+```
+
+会删除数据库卷，可能导致本地聊天记录、记忆、反馈等数据丢失。一般不要执行。
 
 普通聊天接口路径保持不变：
 
