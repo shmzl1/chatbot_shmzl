@@ -336,27 +336,32 @@ class PersonaReviewService:
 - 字符串里的双引号必须转义。
 - 数组和对象最后一项不能有尾逗号。
 - 不要输出完整 character.json。
-- 只输出 patch。
-- patch 不能包含禁止字段。
-- patch 不能使用 dialogues、reactions、bad_examples、revision_notes 作为 key。
-- 新增 dialogue 只能写 dialogues_append。
-- 新增 reaction 只能写 reactions_append。
-- 新增 bad example 只能写 bad_examples_append。
-- 新增 revision note 只能写 revision_note。
-- patch 里只能使用 revision_note，不能使用 revision_notes。
-- dialogues_append、reactions_append、bad_examples_append 的每个新增 item 不能包含 id，后端会自动生成。
 - 不要修改 id、display_name、avatar_url、voice、gptsovits_base_url、ref_audio_path、prompt_text。
-- 优先允许修改 style_contract、speaking_style、forbidden、dialogues、reactions、bad_examples、evaluation_criteria、revision_notes。
 - 不要删除已有有效 dialogues，可以新增更符合人设的 dialogues。
 - 可以新增 bad_examples，但不要把用户评价原文大量塞进 character.json。
 - 不要生成非法 JSON。
 - 不要声称已经写入文件。
 - main_issues、revision_plan、risk_notes 最多各 5 条。
-- changed_fields 只能写真实 character.json 字段，不能写 patch 字段名。
-- changed_fields 正确示例：["dialogues", "bad_examples", "revision_notes"]。
-- changed_fields 错误示例：["dialogues_append", "bad_examples_append", "revision_note"]。
-- dialogues_append、reactions_append、bad_examples_append、evaluation_criteria_append 最多各 5 条。
 - {sample_policy}
+
+changed_fields 规则：
+- changed_fields 只能使用 character.json 真实字段名。
+- changed_fields 允许字段只有：style_contract、speaking_style、forbidden、dialogues、reactions、bad_examples、evaluation_criteria、revision_notes。
+- changed_fields 正确示例：["dialogues", "bad_examples", "revision_notes"]。
+- changed_fields 禁止写 patch 字段名，例如：dialogues_append、reactions_append、bad_examples_append、evaluation_criteria_append、revision_note。
+
+patch key 规则：
+- patch 只能使用以下 key：style_contract、speaking_style、forbidden、dialogues_append、reactions_append、bad_examples_append、evaluation_criteria_append、revision_note。
+- patch 禁止使用以下 character.json 真实字段名作为 key：dialogues、reactions、bad_examples、revision_notes。
+- revision_notes 是 character.json 真实字段；revision_note 是 patch 里新增一条修订记录的字段。
+- patch 里必须写 revision_note，不能写 revision_notes。
+- 新增 dialogue 只能写 dialogues_append。
+- 新增 reaction 只能写 reactions_append。
+- 新增 bad example 只能写 bad_examples_append。
+- 新增 revision note 只能写 revision_note。
+- dialogues_append、reactions_append、bad_examples_append、evaluation_criteria_append 最多各 5 条。
+- dialogues_append、reactions_append、bad_examples_append 的每个新增 item 不能包含 id，后端会自动生成。
+- bad_examples_append 必须是对象数组，不能是字符串数组。
 
 禁止字段：
 {json.dumps(sorted(PATCH_PROTECTED_FIELDS), ensure_ascii=False, indent=2)}
@@ -375,20 +380,43 @@ class PersonaReviewService:
 
 输出 JSON：
 {{
-  "main_issues": ["当前角色主要问题"],
-  "revision_plan": ["具体修改计划"],
-  "changed_fields": ["style_contract"],
+  "main_issues": ["当前角色回复太像 AI 工具说明，不像别扭敏感的女高中生。"],
+  "revision_plan": ["删除工具式表达，增加别扭、嘴硬、轻微不耐烦的口吻。"],
+  "changed_fields": ["dialogues", "bad_examples", "revision_notes"],
   "patch": {{
     "style_contract": null,
     "speaking_style": null,
     "forbidden": null,
-    "dialogues_append": [],
-    "reactions_append": [],
-    "bad_examples_append": [],
-    "evaluation_criteria_append": [],
-    "revision_note": null
+    "dialogues_append": [
+      {{
+        "scene": "用户指出角色回复太 AI",
+        "style_summary": "先别扭地承认问题，再用短句给出修改方向",
+        "rewrite_rule": "避免说“我可以帮你”，改成“三鹰朝。……你又嫌这个像AI是吧，那我改。”"
+      }}
+    ],
+    "reactions_append": [
+      {{
+        "situation": "用户催促快速修改",
+        "reaction": "有点不耐烦但仍然配合",
+        "reply_pattern": "急什么啊……行，我先把最像AI的那几句删掉。",
+        "avoid": ["不要说我将为你生成方案", "不要自称工具或助手"]
+      }}
+    ],
+    "bad_examples_append": [
+      {{
+        "content": "不要说：能聊天，能看报错。",
+        "reason": "这是 AI 工具介绍口吻，不符合角色人设。"
+      }}
+    ],
+    "evaluation_criteria_append": [
+      "回复不能出现工具式功能介绍，必须先符合角色语气。"
+    ],
+    "revision_note": {{
+      "reason": "根据用户反馈修正角色回复过于 AI 的问题",
+      "summary": "减少工具式表达，强化三鹰朝的别扭、嘴硬和生活化口吻。"
+    }}
   }},
-  "risk_notes": ["风险提示"]
+  "risk_notes": ["不要过度增加攻击性，避免角色变得刻薄。"]
 }}
 """
 
