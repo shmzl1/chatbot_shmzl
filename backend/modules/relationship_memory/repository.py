@@ -26,9 +26,14 @@ class RelationshipMemoryRepository:
                     memory_type,
                     content,
                     evidence,
-                    importance
+                    importance,
+                    is_pinned,
+                    is_editable,
+                    read_policy,
+                    status,
+                    expires_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -40,6 +45,11 @@ class RelationshipMemoryRepository:
                     request.content,
                     Json(request.evidence),
                     request.importance,
+                    request.is_pinned,
+                    request.is_editable,
+                    request.read_policy,
+                    request.status,
+                    request.expires_at,
                 ),
             ).fetchone()
         return self._row_to_event(row)
@@ -54,12 +64,49 @@ class RelationshipMemoryRepository:
                 FROM relationship_memory_events
                 WHERE character_id = %s
                   AND is_active = TRUE
+                  AND status = 'active'
+                  AND (expires_at IS NULL OR expires_at > NOW())
                 ORDER BY importance DESC, updated_at DESC, id DESC
                 LIMIT %s
                 """,
                 (character_id, safe_limit),
             ).fetchall()
         return [self._row_to_event(row) for row in rows]
+
+    def list_prompt_events(self, *, character_id: str, limit: int = 5) -> List[RelationshipMemoryEvent]:
+        database_service.ensure_ready()
+        safe_limit = max(0, min(limit, 100))
+        with database_service._connect() as connection:
+            pinned_rows = connection.execute(
+                """
+                SELECT *
+                FROM relationship_memory_events
+                WHERE character_id = %s
+                  AND is_active = TRUE
+                  AND status = 'active'
+                  AND (is_pinned = TRUE OR read_policy = 'always')
+                  AND read_policy <> 'never'
+                  AND (expires_at IS NULL OR expires_at > NOW())
+                ORDER BY importance DESC, updated_at DESC, id DESC
+                """,
+                (character_id,),
+            ).fetchall()
+            normal_rows = connection.execute(
+                """
+                SELECT *
+                FROM relationship_memory_events
+                WHERE character_id = %s
+                  AND is_active = TRUE
+                  AND status = 'active'
+                  AND is_pinned = FALSE
+                  AND read_policy = 'relevant'
+                  AND (expires_at IS NULL OR expires_at > NOW())
+                ORDER BY importance DESC, updated_at DESC, id DESC
+                LIMIT %s
+                """,
+                (character_id, safe_limit),
+            ).fetchall()
+        return [self._row_to_event(row) for row in [*pinned_rows, *normal_rows]]
 
     def deactivate(self, event_id: int) -> Optional[RelationshipMemoryEvent]:
         database_service.ensure_ready()
@@ -68,6 +115,7 @@ class RelationshipMemoryRepository:
                 """
                 UPDATE relationship_memory_events
                 SET is_active = FALSE,
+                    status = 'archived',
                     updated_at = NOW()
                 WHERE id = %s
                 RETURNING *
@@ -75,6 +123,21 @@ class RelationshipMemoryRepository:
                 (event_id,),
             ).fetchone()
         return self._row_to_event(row) if row else None
+
+    def mark_used(self, event_ids: List[int]) -> None:
+        if not event_ids:
+            return
+        database_service.ensure_ready()
+        with database_service._connect() as connection:
+            connection.execute(
+                """
+                UPDATE relationship_memory_events
+                SET last_used_at = NOW(),
+                    use_count = use_count + 1
+                WHERE id = ANY(%s)
+                """,
+                (event_ids,),
+            )
 
     def debug(
         self,
@@ -139,6 +202,13 @@ class RelationshipMemoryRepository:
             evidence=evidence,
             importance=row["importance"],
             is_active=row["is_active"],
+            is_pinned=bool(row.get("is_pinned", False)),
+            is_editable=bool(row.get("is_editable", True)),
+            read_policy=str(row.get("read_policy") or "relevant"),
+            status=str(row.get("status") or "active"),
+            expires_at=self._as_text(row["expires_at"]) if row.get("expires_at") else None,
+            last_used_at=self._as_text(row["last_used_at"]) if row.get("last_used_at") else None,
+            use_count=int(row.get("use_count") or 0),
             created_at=self._as_text(row["created_at"]),
             updated_at=self._as_text(row["updated_at"]),
         )

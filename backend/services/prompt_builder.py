@@ -42,6 +42,36 @@ def _format_history(history: List[Dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
+def _format_character_items(items: List[Dict[str, Any]], field_names: Iterable[str]) -> str:
+    if not items:
+        return "- 未配置"
+
+    lines = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = item.get("title") or item.get("scene") or item.get("situation") or item.get("id", "")
+        details = []
+        for field_name in field_names:
+            value = item.get(field_name)
+            if value:
+                details.append(f"{field_name}: {value}")
+        lines.append(f"- [{item.get('id', '')}] {title}：{'；'.join(details)}")
+    return "\n".join(lines) if lines else "- 未配置"
+
+
+def _split_pinned_hits(hits: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    pinned = []
+    relevant = []
+    for hit in hits:
+        payload = hit.get("payload", {})
+        if payload.get("is_pinned") or payload.get("read_policy") == "always":
+            pinned.append(hit)
+        else:
+            relevant.append(hit)
+    return pinned, relevant
+
+
 def build_chat_prompt(
     character: CharacterCard,
     user_message: str,
@@ -59,8 +89,12 @@ def build_chat_prompt(
     memory_hits = retrieval_context.get("memories", [])
     relationship_memory_hits = retrieval_context.get("relationship_memories", [])
     history = retrieval_context.get("history", [])
+    pinned_memory_hits, relevant_memory_hits = _split_pinned_hits(memory_hits)
+    pinned_relationship_hits, relevant_relationship_hits = _split_pinned_hits(relationship_memory_hits)
 
     return f"""请根据角色卡，为用户输入生成 3 个候选回复。
+
+固定核心人设每次必须完整读取，不允许被普通记忆或可变样例覆盖。
 
 角色 ID：{character.id}
 角色名：{character.display_name}
@@ -77,10 +111,16 @@ def build_chat_prompt(
 禁用规则：
 {_lines(character.forbidden)}
 
+固定风格契约：
+{json.dumps(character.style_contract.dict(), ensure_ascii=False, indent=2)}
+
 回复模式：
 {reply_patterns}
 
-相关背景故事：
+固定背景设定：
+{_format_character_items(character.lore, ("content", "tags"))}
+
+相关背景检索补充：
 {_format_hits(lore_hits, ("content", "tags"))}
 
 相似说话规律：
@@ -89,11 +129,17 @@ def build_chat_prompt(
 当前场景反应规则：
 {_format_hits(reaction_hits, ("reaction", "reply_pattern", "avoid"))}
 
-长期记忆：
-{_format_hits(memory_hits, ("content", "memory_type", "importance", "tags"))}
+pinned / always_read 长期记忆（每次必读，不参与 topK）：
+{_format_hits(pinned_memory_hits, ("content", "memory_type", "importance", "tags"))}
 
-关系长期上下文：
-{_format_hits(relationship_memory_hits, ("content", "memory_type", "importance", "source_type", "evidence"))}
+普通 active 长期记忆 topK：
+{_format_hits(relevant_memory_hits, ("content", "memory_type", "importance", "tags"))}
+
+pinned / always_read 关系记忆（每次必读，不参与 topK）：
+{_format_hits(pinned_relationship_hits, ("content", "memory_type", "importance", "source_type", "evidence"))}
+
+普通 active 关系记忆 topK：
+{_format_hits(relevant_relationship_hits, ("content", "memory_type", "importance", "source_type", "evidence"))}
 
 最近聊天历史：
 {_format_history(history)}

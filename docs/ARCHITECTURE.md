@@ -88,6 +88,13 @@ frontend
   -> modules.characters validation and write
 ```
 
+人设数据分层：
+
+- 固定核心人设：`id`、`display_name`、`core_personality`、`speaking_style`、`relationship_to_user`、`forbidden`、`reply_patterns`、`lore`、`style_contract`。这部分只能由用户未来在管理界面中显式修改，AI 不能自动 patch，也不能被压缩裁剪。聊天 prompt 每次完整读取固定核心人设。`avatar_url` 和 `voice` 是受保护元数据，也不能被人设编辑 AI 自动修改。
+- 可变补充人设：`dialogues`、`reactions`、`bad_examples`、`evaluation_criteria`、`revision_notes`。这部分允许人设编辑 AI 追加；用户确认 apply 后，后端按上限压缩，并将裁剪内容追加到角色包 `backups/persona_compaction_archive.jsonl`。
+
+可变补充上限：`dialogues=20`、`reactions=20`、`bad_examples=20`、`evaluation_criteria=30`、`revision_notes=20`。生成 preview 不写归档，只有用户确认应用并写入 `character.json` 后才归档。
+
 语音：
 
 ```text
@@ -112,6 +119,14 @@ LLM JSON 使用严格 `json.loads`。后端不会从 Markdown 代码块或自然
 `relationship_memory_events` 是关系长期上下文的最小闭环表。普通聊天会读取当前角色有效关系记忆并加入 prompt，但保留旧 `long_term_memories` 路径兼容。
 
 用户确认聊天中的记忆建议时，前端继续写入 `/memory`，同时写入 `/relationship-memory`。停用关系记忆通过 `is_active = false` 完成，不删除历史事件。
+
+记忆读取分层：
+
+- pinned / always_read：`is_pinned=true` 或 `read_policy=always`，每次 prompt 必读，不参与 topK。
+- 普通 active：`status=active`、`read_policy=relevant`、未过期，只按 topK 进入 prompt。
+- 短期记忆：通过 `expires_at` 控制，过期后不进入 prompt。
+
+`archived`、`superseded`、`deleted`、`read_policy=never` 和已过期记忆不会进入 prompt。未来管理界面应允许用户手动设置 pinned 与可遗忘记忆。
 
 ## GPT-SoVITS
 

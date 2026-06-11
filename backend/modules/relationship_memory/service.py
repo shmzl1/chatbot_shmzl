@@ -53,7 +53,10 @@ class RelationshipMemoryService:
         )
 
     def prompt_hits(self, *, character_id: str, limit: int = 5) -> List[Dict[str, Any]]:
-        events = self.list_active(character_id=character_id, limit=limit)
+        events = relationship_memory_repository.list_prompt_events(
+            character_id=character_id,
+            limit=limit,
+        )
         return [
             {
                 "id": f"relmem_{event.id}",
@@ -69,10 +72,22 @@ class RelationshipMemoryService:
                     "source_id": event.source_id,
                     "source_turn_id": event.source_turn_id,
                     "evidence": event.evidence,
+                    "is_pinned": event.is_pinned,
+                    "read_policy": event.read_policy,
+                    "status": event.status,
+                    "expires_at": event.expires_at,
                 },
             }
             for event in events
         ]
+
+    def mark_prompt_hits_used(self, hits: List[Dict[str, Any]]) -> None:
+        event_ids = [
+            hit["payload"]["id"]
+            for hit in hits
+            if isinstance(hit.get("payload"), dict) and "id" in hit["payload"]
+        ]
+        relationship_memory_repository.mark_used(event_ids)
 
 
 relationship_memory_service = RelationshipMemoryService()

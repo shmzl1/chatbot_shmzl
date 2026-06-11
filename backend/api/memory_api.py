@@ -31,6 +31,11 @@ def create_memory(request: MemoryCreateRequest) -> MemoryRecord:
         memory_type=request.memory_type,
         importance=request.importance,
         tags=request.tags,
+        is_pinned=request.is_pinned,
+        is_editable=request.is_editable,
+        read_policy=request.read_policy,
+        status=request.status,
+        expires_at=request.expires_at,
     )
 
 

@@ -222,6 +222,11 @@ class MemoryCreateRequest(BaseModel):
     memory_type: str = "note"
     importance: int = Field(default=5, ge=1, le=10)
     tags: List[str] = Field(default_factory=list)
+    is_pinned: bool = False
+    is_editable: bool = True
+    read_policy: str = Field(default="relevant", pattern="^(always|relevant|never)$")
+    status: str = Field(default="active", pattern="^(active|archived|superseded|deleted)$")
+    expires_at: Optional[str] = None
 
 
 class MemoryRecord(BaseModel):
@@ -231,9 +236,15 @@ class MemoryRecord(BaseModel):
     content: str
     importance: int
     tags: List[str] = Field(default_factory=list)
+    is_pinned: bool = False
+    is_editable: bool = True
+    read_policy: str = "relevant"
+    status: str = "active"
+    expires_at: Optional[str] = None
     created_at: str
     updated_at: str
     last_used_at: Optional[str] = None
+    use_count: int = 0
 
 
 class MemoryListResponse(BaseModel):

@@ -14,6 +14,11 @@ class RelationshipMemoryCreateRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
     evidence: Dict[str, Any] = Field(default_factory=dict)
     importance: int = Field(default=5, ge=1, le=10)
+    is_pinned: bool = False
+    is_editable: bool = True
+    read_policy: str = Field(default="relevant", pattern="^(always|relevant|never)$")
+    status: str = Field(default="active", pattern="^(active|archived|superseded|deleted)$")
+    expires_at: Optional[str] = None
 
 
 class RelationshipMemoryEvent(BaseModel):
@@ -27,6 +32,13 @@ class RelationshipMemoryEvent(BaseModel):
     evidence: Dict[str, Any] = Field(default_factory=dict)
     importance: int
     is_active: bool
+    is_pinned: bool = False
+    is_editable: bool = True
+    read_policy: str = "relevant"
+    status: str = "active"
+    expires_at: Optional[str] = None
+    last_used_at: Optional[str] = None
+    use_count: int = 0
     created_at: str
     updated_at: str
 

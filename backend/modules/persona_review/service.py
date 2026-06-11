@@ -14,9 +14,6 @@ from services.llm_service import llm_service
 
 
 ALLOWED_REVIEW_FIELDS = {
-    "style_contract",
-    "speaking_style",
-    "forbidden",
     "dialogues",
     "reactions",
     "bad_examples",
@@ -24,10 +21,27 @@ ALLOWED_REVIEW_FIELDS = {
     "revision_notes",
 }
 LIGHTWEIGHT_REVIEW_FIELDS = {
-    "style_contract",
     "bad_examples",
     "evaluation_criteria",
     "revision_notes",
+}
+IMMUTABLE_PERSONA_FIELDS = {
+    "id",
+    "display_name",
+    "core_personality",
+    "speaking_style",
+    "relationship_to_user",
+    "forbidden",
+    "reply_patterns",
+    "lore",
+    "style_contract",
+}
+VARIABLE_PERSONA_FIELD_LIMITS = {
+    "dialogues": 20,
+    "reactions": 20,
+    "bad_examples": 20,
+    "evaluation_criteria": 30,
+    "revision_notes": 20,
 }
 PROTECTED_FIELDS = {
     "id",
@@ -36,9 +50,6 @@ PROTECTED_FIELDS = {
     "voice",
 }
 PATCH_ALLOWED_KEYS = {
-    "style_contract",
-    "speaking_style",
-    "forbidden",
     "dialogues_append",
     "reactions_append",
     "bad_examples_append",
@@ -310,9 +321,14 @@ class PersonaReviewService:
         character_context = {
             "id": character_payload.get("id"),
             "display_name": character_payload.get("display_name"),
+            "immutable_fields": sorted(IMMUTABLE_PERSONA_FIELDS),
+            "variable_fields": sorted(ALLOWED_REVIEW_FIELDS),
             "core_personality": character_payload.get("core_personality"),
             "speaking_style": character_payload.get("speaking_style"),
+            "relationship_to_user": character_payload.get("relationship_to_user"),
             "forbidden": character_payload.get("forbidden"),
+            "reply_patterns": character_payload.get("reply_patterns"),
+            "lore": character_payload.get("lore"),
             "style_contract": character_payload.get("style_contract"),
             "evaluation_criteria": character_payload.get("evaluation_criteria"),
             "bad_examples": self._list_preview(character_payload.get("bad_examples"), 5),
@@ -321,7 +337,7 @@ class PersonaReviewService:
         }
         evidence_count = feedback_summary["total_feedback"] + len(selected_turns) + self._user_history_count(history)
         sample_policy = (
-            "证据少于 5 条，只允许轻量修改 style_contract、bad_examples、evaluation_criteria、revision_notes。"
+            "证据少于 5 条，只允许轻量追加 bad_examples、evaluation_criteria、revision_notes。"
             if evidence_count < 5
             else "可以根据集中问题谨慎修改允许字段。"
         )
@@ -337,8 +353,13 @@ class PersonaReviewService:
 - 数组和对象最后一项不能有尾逗号。
 - 不要输出完整 character.json。
 - 不要修改 id、display_name、avatar_url、voice、gptsovits_base_url、ref_audio_path、prompt_text。
+- 你只能修改可变补充字段，不能修改固定核心人设。
+- 固定核心人设包括：id、display_name、core_personality、speaking_style、relationship_to_user、forbidden、reply_patterns、lore、style_contract。
+- 不要修改角色身份、核心性格、核心背景、核心关系、核心边界、核心说话规则和 forbidden 核心禁止项。
 - 不要删除已有有效 dialogues，可以新增更符合人设的 dialogues。
-- 可以新增 bad_examples，但不要把用户评价原文大量塞进 character.json。
+- 不要不断追加重复样例；如果已有规则能覆盖当前反馈，不要新增重复规则。
+- 新增 dialogues、reactions、bad_examples 必须少量、典型、有价值。
+- revision_note 要简短。
 - 不要生成非法 JSON。
 - 不要声称已经写入文件。
 - main_issues、revision_plan、risk_notes 最多各 5 条。
@@ -346,12 +367,13 @@ class PersonaReviewService:
 
 changed_fields 规则：
 - changed_fields 只能使用 character.json 真实字段名。
-- changed_fields 允许字段只有：style_contract、speaking_style、forbidden、dialogues、reactions、bad_examples、evaluation_criteria、revision_notes。
+- changed_fields 允许字段只有：dialogues、reactions、bad_examples、evaluation_criteria、revision_notes。
 - changed_fields 正确示例：["dialogues", "bad_examples", "revision_notes"]。
 - changed_fields 禁止写 patch 字段名，例如：dialogues_append、reactions_append、bad_examples_append、evaluation_criteria_append、revision_note。
 
 patch key 规则：
-- patch 只能使用以下 key：style_contract、speaking_style、forbidden、dialogues_append、reactions_append、bad_examples_append、evaluation_criteria_append、revision_note。
+- patch 只能使用以下 key：dialogues_append、reactions_append、bad_examples_append、evaluation_criteria_append、revision_note。
+- patch 不能写入固定核心人设字段。
 - patch 禁止使用以下 character.json 真实字段名作为 key：dialogues、reactions、bad_examples、revision_notes。
 - revision_notes 是 character.json 真实字段；revision_note 是 patch 里新增一条修订记录的字段。
 - patch 里必须写 revision_note，不能写 revision_notes。
@@ -384,9 +406,6 @@ patch key 规则：
   "revision_plan": ["删除工具式表达，增加别扭、嘴硬、轻微不耐烦的口吻。"],
   "changed_fields": ["dialogues", "bad_examples", "revision_notes"],
   "patch": {{
-    "style_contract": null,
-    "speaking_style": null,
-    "forbidden": null,
     "dialogues_append": [
       {{
         "scene": "用户指出角色回复太 AI",
@@ -436,6 +455,10 @@ patch key 规则：
             feedback_count=None,
             review_summary=review_summary,
         )
+        merged, archive_entries = self._compact_variable_persona_fields(
+            current_payload=current_payload,
+            merged_payload=merged,
+        )
         changed_fields = [
             field_name
             for field_name in sorted(ALLOWED_REVIEW_FIELDS)
@@ -451,6 +474,7 @@ patch key 规则：
         self._validate_payload(character_id, merged, file_path)
         try:
             pack_writer.write_payload(character_id=character_id, payload=merged, backup=True)
+            self._archive_compacted_persona_items(character_id, archive_entries)
         except Exception as exc:
             if isinstance(exc, HTTPException):
                 raise
@@ -563,7 +587,8 @@ patch key 规则：
 硬性规则：
 - 只输出 JSON。
 - 不要修改 id、display_name、avatar_url、voice、gptsovits_base_url、ref_audio_path、prompt_text。
-- 优先修改 style_contract、speaking_style、forbidden、dialogues、reactions、bad_examples、evaluation_criteria、revision_notes。
+- 只能建议修改可变补充字段：dialogues、reactions、bad_examples、evaluation_criteria、revision_notes。
+- 不要修改固定核心人设：id、display_name、core_personality、speaking_style、relationship_to_user、forbidden、reply_patterns、lore、style_contract。
 - 不要删除已有有效 dialogues；必要时只优化或新增。
 - 不要把反馈原文大量塞进人设。
 - {sample_policy}
@@ -636,7 +661,7 @@ patch key 规则：
     ) -> None:
         changed = [
             field_name
-            for field_name in sorted(PATCH_PROTECTED_FIELDS)
+            for field_name in sorted(PATCH_PROTECTED_FIELDS | IMMUTABLE_PERSONA_FIELDS)
             if field_name in preview_payload and preview_payload.get(field_name) != current_payload.get(field_name)
         ]
         if changed:
@@ -677,15 +702,6 @@ patch key 规则：
         changed_fields = self._changed_fields(review.get("changed_fields"))
 
         normalized_patch = {
-            "style_contract": self._nullable_dict(patch.get("style_contract"), "patch.style_contract"),
-            "speaking_style": self._nullable_string_list(
-                patch.get("speaking_style"),
-                "patch.speaking_style",
-            ),
-            "forbidden": self._nullable_string_list(
-                patch.get("forbidden"),
-                "patch.forbidden",
-            ),
             "dialogues_append": self._object_list(
                 patch.get("dialogues_append"),
                 "patch.dialogues_append",
@@ -762,13 +778,6 @@ patch key 规则：
     ) -> Dict[str, Any]:
         merged = json.loads(json.dumps(current_payload, ensure_ascii=False))
 
-        if patch["style_contract"] is not None:
-            merged["style_contract"] = patch["style_contract"]
-        if patch["speaking_style"] is not None:
-            merged["speaking_style"] = patch["speaking_style"]
-        if patch["forbidden"] is not None:
-            merged["forbidden"] = patch["forbidden"]
-
         for patch_field, (target_field, id_prefix) in PATCH_APPEND_FIELD_MAP.items():
             merged[target_field] = self._append_items_with_unique_ids(
                 current_items=merged.get(target_field, []),
@@ -838,13 +847,11 @@ patch key 规则：
     def _patch_has_changes(self, patch: Dict[str, Any]) -> bool:
         return any(
             [
-                patch["style_contract"] is not None,
-                patch["speaking_style"] is not None,
-                patch["forbidden"] is not None,
                 bool(patch["dialogues_append"]),
                 bool(patch["reactions_append"]),
                 bool(patch["bad_examples_append"]),
                 bool(patch["evaluation_criteria_append"]),
+                patch["revision_note"] is not None,
             ]
         )
 
@@ -986,6 +993,137 @@ patch key 规则：
             }
         )
         return notes
+
+    def _compact_variable_persona_fields(
+        self,
+        *,
+        current_payload: Dict[str, Any],
+        merged_payload: Dict[str, Any],
+    ) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        compacted = dict(merged_payload)
+        archive_entries: List[Dict[str, Any]] = []
+        archived_at = datetime.now(timezone.utc).isoformat()
+
+        for field_name in ("dialogues", "reactions", "bad_examples"):
+            kept, archived = self._keep_early_and_latest(
+                compacted.get(field_name),
+                VARIABLE_PERSONA_FIELD_LIMITS[field_name],
+            )
+            compacted[field_name] = kept
+            archive_entries.extend(
+                self._archive_entries(
+                    archived_at=archived_at,
+                    field_name=field_name,
+                    items=archived,
+                    reason="variable_persona_limit",
+                )
+            )
+
+        kept_criteria, archived_criteria = self._dedupe_and_limit_strings(
+            compacted.get("evaluation_criteria"),
+            VARIABLE_PERSONA_FIELD_LIMITS["evaluation_criteria"],
+        )
+        compacted["evaluation_criteria"] = kept_criteria
+        archive_entries.extend(
+            self._archive_entries(
+                archived_at=archived_at,
+                field_name="evaluation_criteria",
+                items=archived_criteria,
+                reason="variable_persona_limit",
+            )
+        )
+
+        notes = compacted.get("revision_notes")
+        if not isinstance(notes, list):
+            notes = []
+        note_limit = VARIABLE_PERSONA_FIELD_LIMITS["revision_notes"]
+        compacted["revision_notes"] = notes[-note_limit:]
+        archive_entries.extend(
+            self._archive_entries(
+                archived_at=archived_at,
+                field_name="revision_notes",
+                items=notes[:-note_limit],
+                reason="variable_persona_limit",
+            )
+        )
+
+        for field_name in IMMUTABLE_PERSONA_FIELDS:
+            if field_name in current_payload:
+                compacted[field_name] = current_payload.get(field_name)
+
+        return compacted, archive_entries
+
+    def _keep_early_and_latest(self, value: Any, limit: int) -> tuple[List[Dict[str, Any]], List[Any]]:
+        if not isinstance(value, list):
+            return [], []
+        if len(value) <= limit:
+            return [item for item in value if isinstance(item, dict)], []
+
+        early_count = limit // 2
+        latest_count = limit - early_count
+        keep_indexes = set(range(early_count)) | set(range(len(value) - latest_count, len(value)))
+        kept = [item for index, item in enumerate(value) if index in keep_indexes and isinstance(item, dict)]
+        archived = [item for index, item in enumerate(value) if index not in keep_indexes]
+        return kept, archived
+
+    def _dedupe_and_limit_strings(self, value: Any, limit: int) -> tuple[List[str], List[Any]]:
+        if not isinstance(value, list):
+            return [], []
+
+        deduped: List[str] = []
+        removed: List[Any] = []
+        seen: set[str] = set()
+        for item in value:
+            text = str(item).strip()
+            if not text:
+                continue
+            key = " ".join(text.split()).lower()
+            if key in seen:
+                removed.append(item)
+                continue
+            seen.add(key)
+            deduped.append(text)
+
+        if len(deduped) <= limit:
+            return deduped, removed
+
+        early_count = limit // 2
+        latest_count = limit - early_count
+        keep_indexes = set(range(early_count)) | set(range(len(deduped) - latest_count, len(deduped)))
+        kept = [item for index, item in enumerate(deduped) if index in keep_indexes]
+        archived = [item for index, item in enumerate(deduped) if index not in keep_indexes]
+        return kept, [*removed, *archived]
+
+    def _archive_entries(
+        self,
+        *,
+        archived_at: str,
+        field_name: str,
+        items: List[Any],
+        reason: str,
+    ) -> List[Dict[str, Any]]:
+        return [
+            {
+                "archived_at": archived_at,
+                "field": field_name,
+                "reason": reason,
+                "item": item,
+            }
+            for item in items
+        ]
+
+    def _archive_compacted_persona_items(
+        self,
+        character_id: str,
+        archive_entries: List[Dict[str, Any]],
+    ) -> None:
+        if not archive_entries:
+            return
+        archive_path = character_service.pack_dir(character_id) / "backups" / "persona_compaction_archive.jsonl"
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        with archive_path.open("a", encoding="utf-8") as file:
+            for entry in archive_entries:
+                file.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     def _preserve_existing_items(
         self,

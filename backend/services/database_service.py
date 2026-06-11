@@ -410,6 +410,11 @@ class DatabaseService:
         memory_type: str,
         importance: int,
         tags: List[str],
+        is_pinned: bool = False,
+        is_editable: bool = True,
+        read_policy: str = "relevant",
+        status: str = "active",
+        expires_at: Optional[str] = None,
     ) -> MemoryRecord:
         self._ensure_database()
         now = _now()
@@ -422,13 +427,31 @@ class DatabaseService:
                     content,
                     importance,
                     tags_json,
+                    is_pinned,
+                    is_editable,
+                    read_policy,
+                    status,
+                    expires_at,
                     created_at,
                     updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (character_id, memory_type, content, importance, Json(tags), now, now),
+                (
+                    character_id,
+                    memory_type,
+                    content,
+                    importance,
+                    Json(tags),
+                    is_pinned,
+                    is_editable,
+                    read_policy,
+                    status,
+                    expires_at,
+                    now,
+                    now,
+                ),
             ).fetchone()
         return self._row_to_memory(row)
 
@@ -471,35 +494,71 @@ class DatabaseService:
         query: str,
         limit: int,
     ) -> List[Dict[str, Any]]:
-        if limit <= 0:
-            return []
+        self._ensure_database()
+        with self._connect() as connection:
+            pinned_rows = connection.execute(
+                """
+                SELECT *
+                FROM long_term_memories
+                WHERE character_id = %s
+                  AND status = 'active'
+                  AND (is_pinned = TRUE OR read_policy = 'always')
+                  AND read_policy <> 'never'
+                  AND (expires_at IS NULL OR expires_at > NOW())
+                ORDER BY importance DESC, updated_at DESC, id DESC
+                """,
+                (character_id,),
+            ).fetchall()
+            normal_rows = connection.execute(
+                """
+                SELECT *
+                FROM long_term_memories
+                WHERE character_id = %s
+                  AND status = 'active'
+                  AND is_pinned = FALSE
+                  AND read_policy = 'relevant'
+                  AND (expires_at IS NULL OR expires_at > NOW())
+                ORDER BY importance DESC, updated_at DESC, id DESC
+                LIMIT 300
+                """,
+                (character_id,),
+            ).fetchall()
 
-        memories = self.list_memories(character_id=character_id, limit=300)
+        pinned_memories = [self._row_to_memory(row) for row in pinned_rows]
+        memories = [self._row_to_memory(row) for row in normal_rows]
         scored = []
         for index, memory in enumerate(memories):
             text = " ".join([memory.content, " ".join(memory.tags), memory.memory_type])
             score = self._score(text, query) + memory.importance
             scored.append((score, index, memory))
 
-        chosen = sorted(scored, key=lambda item: (-item[0], item[1]))[:limit]
+        chosen = sorted(scored, key=lambda item: (-item[0], item[1]))[: max(0, limit)]
         hits: List[Dict[str, Any]] = []
+        for memory in pinned_memories:
+            hits.append(self._memory_hit(memory, memory.importance, pinned=True))
         for score, _, memory in chosen:
-            hits.append(
-                {
-                    "id": f"mem_{memory.id}",
-                    "source": "memory",
-                    "score": score,
-                    "text": memory.content,
-                    "payload": {
-                        "id": memory.id,
-                        "memory_type": memory.memory_type,
-                        "content": memory.content,
-                        "importance": memory.importance,
-                        "tags": memory.tags,
-                    },
-                }
-            )
+            hits.append(self._memory_hit(memory, score, pinned=False))
         return hits
+
+    def _memory_hit(self, memory: MemoryRecord, score: int, *, pinned: bool) -> Dict[str, Any]:
+        return {
+            "id": f"mem_{memory.id}",
+            "source": "memory",
+            "score": score,
+            "text": memory.content,
+            "payload": {
+                "id": memory.id,
+                "memory_type": memory.memory_type,
+                "content": memory.content,
+                "importance": memory.importance,
+                "tags": memory.tags,
+                "is_pinned": memory.is_pinned,
+                "read_policy": memory.read_policy,
+                "status": memory.status,
+                "expires_at": memory.expires_at,
+                "pinned_prompt": pinned,
+            },
+        }
 
     def mark_memories_used(self, memory_ids: List[int]) -> None:
         if not memory_ids:
@@ -507,7 +566,12 @@ class DatabaseService:
         self._ensure_database()
         with self._connect() as connection:
             connection.execute(
-                "UPDATE long_term_memories SET last_used_at = %s WHERE id = ANY(%s)",
+                """
+                UPDATE long_term_memories
+                SET last_used_at = %s,
+                    use_count = use_count + 1
+                WHERE id = ANY(%s)
+                """,
                 (_now(), memory_ids),
             )
 
@@ -944,9 +1008,15 @@ class DatabaseService:
             content=row["content"],
             importance=row["importance"],
             tags=tags,
+            is_pinned=bool(row.get("is_pinned", False)),
+            is_editable=bool(row.get("is_editable", True)),
+            read_policy=str(row.get("read_policy") or "relevant"),
+            status=str(row.get("status") or "active"),
+            expires_at=self._as_text(row["expires_at"]) if row.get("expires_at") else None,
             created_at=self._as_text(row["created_at"]),
             updated_at=self._as_text(row["updated_at"]),
             last_used_at=self._as_text(row["last_used_at"]) if row["last_used_at"] else None,
+            use_count=int(row.get("use_count") or 0),
         )
 
     def _row_to_knowledge(self, row: Dict[str, Any]) -> KnowledgeRecord:

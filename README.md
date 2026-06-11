@@ -331,13 +331,28 @@ POST /characters/{character_id}/persona-review/rollback
 
 `finalize` 只接受模型输出 patch JSON。后端把 patch 合并到当前 `character.json`，生成 `preview_character_json`，校验通过后返回预览。
 
-`apply` 必须由用户确认后才写入。patch 不允许修改 `id`、`display_name`、`avatar_url`、`voice`、`gptsovits_base_url`、`ref_audio_path`、`prompt_text`。模型返回非法 JSON 时直接返回 502，不做自动修补。
+`apply` 必须由用户确认后才写入。模型返回非法 JSON 时直接返回 502，不做自动修补。
+
+人设分为两层：
+
+- 固定核心人设：`id`、`display_name`、`core_personality`、`speaking_style`、`relationship_to_user`、`forbidden`、`reply_patterns`、`lore`、`style_contract`。这些字段不可被人设编辑 AI 自动修改、删除、覆盖或压缩，每次聊天 prompt 必须完整读取。`avatar_url` 和 `voice` 是受保护元数据，也不可被人设编辑 AI 自动修改。
+- 可变补充人设：`dialogues`、`reactions`、`bad_examples`、`evaluation_criteria`、`revision_notes`。这些字段可以由人设编辑 AI 追加，并在用户确认应用后压缩和归档。
+
+可变补充字段上限：`dialogues` 20 条，`reactions` 20 条，`bad_examples` 20 条，`evaluation_criteria` 30 条，`revision_notes` 20 条。压缩只在用户点击【确认应用修改】并真正写入 `character.json` 时发生；被裁剪内容写入角色包 `backups/persona_compaction_archive.jsonl`，不会在生成 preview 时重复归档。
 
 ## 关系记忆
 
 `relationship_memory_events` 保存用户和角色之间的有效长期关系上下文。普通聊天仍兼容旧 `long_term_memories`，同时会把有效关系记忆加入聊天 prompt 的长期上下文。
 
 前端“确认记忆建议”时会继续写入旧长期记忆，并额外写入一条关系记忆事件，来源标记为 `chat`，记录会话和 turn 信息。停用关系记忆只会把 `is_active` 置为 `false`，不会删除历史事件。
+
+记忆分为三类：
+
+- pinned / always_read 记忆：`is_pinned=true` 或 `read_policy=always`，每次 prompt 必须读取，不参与 topK 裁剪，不允许 AI 自动删除或覆盖。
+- 普通 active 记忆：`status=active` 且 `read_policy=relevant`，只按相关性和重要度 topK 进入 prompt。
+- 短期记忆：可以设置 `expires_at`，过期后不再进入 prompt。
+
+`archived`、`superseded`、`deleted`、`read_policy=never` 或已过期的记忆不会进入聊天 prompt。未来前端管理界面应允许用户手动设置哪些记忆是 pinned，哪些可以归档或遗忘。
 
 ## 语音规则
 

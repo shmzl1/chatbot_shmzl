@@ -119,6 +119,7 @@ def _run_chat(request: ChatTextRequest, voice: bool) -> ChatTextResponse:
         if isinstance(hit.get("payload"), dict) and "id" in hit["payload"]
     ]
     database_service.mark_memories_used(used_memory_ids)
+    relationship_memory_service.mark_prompt_hits_used(relationship_memory_hits)
 
     debug = {
         "character_id": character.id,

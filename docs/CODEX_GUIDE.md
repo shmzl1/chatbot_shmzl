@@ -94,13 +94,17 @@ docker compose --project-directory . -f deploy/docker/docker-compose.yml ...
 
 用户确认聊天记忆建议后，应同时写入旧 `/memory` 和新 `/relationship-memory`。停用关系记忆只更新 `is_active = false`，不要物理删除事件。
 
+记忆必须分层读取：`is_pinned=true` 或 `read_policy=always` 的 pinned 记忆每次 prompt 必读，不参与 topK；普通记忆只有 `status=active`、`read_policy=relevant` 且未过期时才按 topK 进入 prompt；`archived`、`superseded`、`deleted`、`read_policy=never` 或已过期的记忆不能进入 prompt。AI 不应自动删除或覆盖 pinned 记忆，未来只能由用户在管理界面显式维护。
+
 当前阶段不要在 relationship_memory 中新增日程、日记、QQ/微信接入或云部署能力。
 
 ## 人设编辑
 
 `finalize` 使用 patch 模式：模型只输出 patch JSON，后端合并 patch，生成 `preview_character_json`，校验通过后返回。`apply` 仍然必须由用户确认后才写入。
 
-patch 不能修改 `id`、`display_name`、`avatar_url`、`voice`、`gptsovits_base_url`、`ref_audio_path`、`prompt_text`。
+人设分为固定核心和可变补充。固定核心字段包括 `id`、`display_name`、`core_personality`、`speaking_style`、`relationship_to_user`、`forbidden`、`reply_patterns`、`lore`、`style_contract`，不能被 AI 自动修改、删除、覆盖或压缩，每次聊天 prompt 必须完整读取。`avatar_url` 和 `voice` 是受保护元数据，也不能被人设编辑 AI 自动修改。
+
+可变补充字段包括 `dialogues`、`reactions`、`bad_examples`、`evaluation_criteria`、`revision_notes`。人设编辑 patch 只能追加这些字段对应的补充内容；用户确认 apply 后才允许按上限压缩，裁剪内容必须归档到角色包 `backups/persona_compaction_archive.jsonl`，不能静默丢弃。
 
 ## 语音
 
