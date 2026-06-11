@@ -13,6 +13,7 @@ from modules.memory.api import router as memory_router
 from modules.persona_review.api import router as feedback_router
 from modules.relationship_memory.api import router as relationship_memory_router
 from modules.voice.api import router as voice_router
+from services.auth_service import auth_service
 from services.database_service import database_service
 
 
@@ -36,6 +37,7 @@ app.include_router(voice_router)
 @app.on_event("startup")
 def run_database_migrations() -> None:
     database_service.ensure_ready()
+    auth_service.ensure_default_user()
 
 
 @app.get("/", include_in_schema=False)

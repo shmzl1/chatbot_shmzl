@@ -6,42 +6,7 @@
     <title>Role Chatbot</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
-  <body class="user-mode unauthenticated">
-    <section id="authScreen" class="auth-screen">
-      <div class="auth-card">
-        <p class="eyebrow">Local Role</p>
-        <h1 id="authTitle">本地登录锁</h1>
-        <p id="authSubtitle" class="auth-subtitle">请输入本地账号密码后进入聊天。</p>
-        <form id="setupForm" class="auth-form hidden">
-          <label>
-            <span>用户名</span>
-            <input id="setupUsernameInput" type="text" autocomplete="username" minlength="3" required />
-          </label>
-          <label>
-            <span>密码</span>
-            <input id="setupPasswordInput" type="password" autocomplete="new-password" minlength="6" required />
-          </label>
-          <label>
-            <span>确认密码</span>
-            <input id="setupPasswordConfirmInput" type="password" autocomplete="new-password" minlength="6" required />
-          </label>
-          <button type="submit">创建本地账号</button>
-        </form>
-        <form id="loginForm" class="auth-form hidden">
-          <label>
-            <span>用户名</span>
-            <input id="loginUsernameInput" type="text" autocomplete="username" required />
-          </label>
-          <label>
-            <span>密码</span>
-            <input id="loginPasswordInput" type="password" autocomplete="current-password" required />
-          </label>
-          <button type="submit">登录</button>
-        </form>
-        <div id="authError" class="error-box hidden"></div>
-      </div>
-    </section>
-
+  <body class="user-mode authenticated">
     <div id="appShell" class="app-shell">
       <aside class="sessions-pane">
         <div class="pane-header">
@@ -55,13 +20,12 @@
         <section class="user-panel">
           <div id="currentUserAvatar" class="avatar-host"></div>
           <div class="user-panel-main">
-            <strong id="currentUsername">未登录</strong>
+            <strong id="currentUsername">我</strong>
             <label class="upload-link">
               上传我的头像
               <input id="userAvatarInput" type="file" accept="image/png,image/jpeg,image/webp" />
             </label>
           </div>
-          <button id="logoutButton" class="text-button danger" type="button">退出</button>
         </section>
 
         <section class="character-panel">
@@ -236,6 +200,26 @@
           </div>
           <button id="closeSettingsButton" class="icon-button muted" type="button" title="关闭">×</button>
         </div>
+
+        <section class="settings-section">
+          <h3>本地用户</h3>
+          <div class="settings-user-card">
+            <div id="settingsUserAvatar" class="avatar-host"></div>
+            <div class="settings-user-main">
+              <label class="setting-field" for="userProfileUsernameInput">
+                <span>显示 ID / 用户名</span>
+                <input id="userProfileUsernameInput" type="text" maxlength="50" />
+              </label>
+              <div class="settings-user-actions">
+                <label class="upload-link">
+                  上传头像
+                  <input id="settingsUserAvatarInput" type="file" accept="image/png,image/jpeg,image/webp" />
+                </label>
+                <button id="saveUserProfileButton" class="text-button" type="button">保存</button>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section class="settings-section">
           <h3>聊天</h3>

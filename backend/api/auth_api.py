@@ -5,6 +5,7 @@ from core.schemas import (
     AuthTokenResponse,
     AvatarUploadResponse,
     UserLoginRequest,
+    UserProfileUpdateRequest,
     UserPublic,
     UserRecord,
     UserSetupRequest,
@@ -19,7 +20,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.get("/status", response_model=AuthStatusResponse)
 def status() -> AuthStatusResponse:
-    return AuthStatusResponse(has_user=auth_service.has_user())
+    auth_service.ensure_default_user()
+    return AuthStatusResponse(has_user=True)
 
 
 @router.post("/setup", response_model=AuthTokenResponse)
@@ -37,6 +39,11 @@ def login(request: UserLoginRequest) -> AuthTokenResponse:
 @router.get("/me", response_model=UserPublic)
 def me(current_user: UserRecord = Depends(get_current_user)) -> UserPublic:
     return public_user(current_user)
+
+
+@router.put("/me", response_model=UserPublic)
+def update_me(request: UserProfileUpdateRequest) -> UserPublic:
+    return public_user(auth_service.update_default_user_profile(username=request.username))
 
 
 @router.post("/me/avatar", response_model=AvatarUploadResponse)

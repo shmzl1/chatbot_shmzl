@@ -313,6 +313,49 @@ class DatabaseService:
             ).fetchone()
         return self._row_to_user(row) if row else None
 
+    def get_single_user(self) -> Optional[UserRecord]:
+        self._ensure_database()
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM users ORDER BY id ASC LIMIT 2"
+            ).fetchall()
+        if len(rows) > 1:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Duplicate local users found. This project supports exactly one "
+                    "local user; please inspect the users table and manually resolve duplicates."
+                ),
+            )
+        return self._row_to_user(rows[0]) if rows else None
+
+    def update_user_profile(self, user_id: int, username: str) -> UserRecord:
+        self._ensure_database()
+        normalized_username = username.strip()
+        if not normalized_username:
+            raise HTTPException(status_code=400, detail="用户名不能为空")
+        if len(normalized_username) > 50:
+            raise HTTPException(status_code=400, detail="用户名长度不能超过 50")
+
+        try:
+            with self._connect() as connection:
+                row = connection.execute(
+                    """
+                    UPDATE users
+                    SET username = %s,
+                        updated_at = %s
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (normalized_username, _now(), user_id),
+                ).fetchone()
+        except psycopg.errors.UniqueViolation as exc:
+            raise HTTPException(status_code=409, detail="用户名已存在") from exc
+
+        if not row:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        return self._row_to_user(row)
+
     def update_user_avatar(self, user_id: int, avatar_url: str) -> UserRecord:
         self._ensure_database()
         with self._connect() as connection:

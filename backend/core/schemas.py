@@ -289,12 +289,16 @@ class TurnFeedbackResponse(BaseModel):
 
 class UserLoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=50)
-    password: str
+    password: str = ""
 
 
 class UserSetupRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
-    password: str
+    username: str = Field(default="我", min_length=1, max_length=50)
+    password: str = ""
+
+
+class UserProfileUpdateRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
 
 
 class AuthStatusResponse(BaseModel):

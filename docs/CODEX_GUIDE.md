@@ -88,6 +88,12 @@ docker compose --project-directory . -f deploy/docker/docker-compose.yml ...
 
 缺配置、模型失败、超时、JSON 解析失败都应直接报错，并说明 profile、model 和具体错误；错误信息不能包含 API Key。
 
+## 本地用户
+
+项目是 Windows 本地单用户模式，不再需要注册、登录、密码或 JWT 登录锁。后端会自动确保 `users` 表里有一个默认本地用户；`get_current_user` 只是兼容依赖名，必须直接返回默认用户，不能因为缺少 Bearer Token 返回 401。
+
+用户可以通过 `/auth/me` 查看和修改显示 ID / 用户名，通过 `/auth/me/avatar` 上传头像。不要修改 `users.id`，不要恢复密码登录、JWT 校验或前端登录页。如果需要清空本地用户数据，应手动清理数据库或另做专门工具。
+
 ## relationship_memory
 
 关系记忆使用 `relationship_memory_events` 表。普通聊天读取有效关系记忆加入长期上下文，同时继续保留 `long_term_memories` 兼容。

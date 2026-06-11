@@ -1,8 +1,4 @@
-const TOKEN_KEY = "roleChatbotToken";
-
 const state = {
-  token: window.localStorage.getItem(TOKEN_KEY) || "",
-  hasUser: false,
   currentUser: null,
   currentCharacter: null,
   currentSessionId: null,
@@ -37,9 +33,6 @@ const PERSONA_TAG_OPTIONS = [
 const elements = {
   activeSessionTitle: document.querySelector("#activeSessionTitle"),
   appStatusInfo: document.querySelector("#appStatusInfo"),
-  authError: document.querySelector("#authError"),
-  authSubtitle: document.querySelector("#authSubtitle"),
-  authTitle: document.querySelector("#authTitle"),
   candidateList: document.querySelector("#candidateList"),
   characterAvatarInput: document.querySelector("#characterAvatarInput"),
   characterJsonInput: document.querySelector("#characterJsonInput"),
@@ -66,10 +59,6 @@ const elements = {
   knowledgeTitleInput: document.querySelector("#knowledgeTitleInput"),
   knowledgeTypeSelect: document.querySelector("#knowledgeTypeSelect"),
   loadCharacterButton: document.querySelector("#loadCharacterButton"),
-  loginForm: document.querySelector("#loginForm"),
-  loginPasswordInput: document.querySelector("#loginPasswordInput"),
-  loginUsernameInput: document.querySelector("#loginUsernameInput"),
-  logoutButton: document.querySelector("#logoutButton"),
   memoryConfirmList: document.querySelector("#memoryConfirmList"),
   memoryForm: document.querySelector("#memoryForm"),
   memoryImportanceInput: document.querySelector("#memoryImportanceInput"),
@@ -110,14 +99,14 @@ const elements = {
   settingsCharacterSelect: document.querySelector("#settingsCharacterSelect"),
   settingsDebugToggle: document.querySelector("#settingsDebugToggle"),
   settingsOverlay: document.querySelector("#settingsOverlay"),
+  settingsUserAvatar: document.querySelector("#settingsUserAvatar"),
+  settingsUserAvatarInput: document.querySelector("#settingsUserAvatarInput"),
   settingsVoiceToggle: document.querySelector("#settingsVoiceToggle"),
-  setupForm: document.querySelector("#setupForm"),
-  setupPasswordConfirmInput: document.querySelector("#setupPasswordConfirmInput"),
-  setupPasswordInput: document.querySelector("#setupPasswordInput"),
-  setupUsernameInput: document.querySelector("#setupUsernameInput"),
+  saveUserProfileButton: document.querySelector("#saveUserProfileButton"),
   statusText: document.querySelector("#statusText"),
   summarizePersonaButton: document.querySelector("#summarizePersonaButton"),
   userAvatarInput: document.querySelector("#userAvatarInput"),
+  userProfileUsernameInput: document.querySelector("#userProfileUsernameInput"),
   voiceTestEmotionSelect: document.querySelector("#voiceTestEmotionSelect"),
   voiceTestForm: document.querySelector("#voiceTestForm"),
   voiceTestResult: document.querySelector("#voiceTestResult"),
@@ -135,7 +124,7 @@ function escapeHtml(value) {
 }
 
 function authHeaders(headers = {}) {
-  return state.token ? { Authorization: `Bearer ${state.token}`, ...headers } : headers;
+  return headers;
 }
 
 async function requestJson(url, options = {}) {
@@ -149,9 +138,6 @@ async function requestJson(url, options = {}) {
     },
   });
   const payload = await response.json().catch(() => ({}));
-  if (response.status === 401 && !options.skipAuthRedirect) {
-    logout(false, "登录已失效，请重新登录");
-  }
   if (!response.ok) {
     const detail = payload.detail || `${response.status} ${response.statusText} at ${url}`;
     throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
@@ -184,31 +170,6 @@ function friendlyError(error) {
     return "AI 接口调用失败。请检查 API Key、模型名或网络连接。";
   }
   return message;
-}
-
-function showAuthError(errorOrMessage) {
-  elements.authError.textContent =
-    typeof errorOrMessage === "string" ? errorOrMessage : friendlyError(errorOrMessage);
-  elements.authError.classList.remove("hidden");
-}
-
-function clearAuthError() {
-  elements.authError.textContent = "";
-  elements.authError.classList.add("hidden");
-}
-
-function showAuthMode(mode, message = "") {
-  clearAuthError();
-  const setup = mode === "setup";
-  elements.setupForm.classList.toggle("hidden", !setup);
-  elements.loginForm.classList.toggle("hidden", setup);
-  elements.authTitle.textContent = setup ? "初始化本地账号" : "本地登录锁";
-  elements.authSubtitle.textContent = setup
-    ? "第一次使用前，先设置唯一的本地账号和密码。"
-    : "请输入本地账号密码后进入聊天。";
-  if (message) {
-    showAuthError(message);
-  }
 }
 
 function setAuthenticated(authenticated) {
@@ -279,13 +240,25 @@ function avatarMarkup(url, label, fallback, size = "") {
 
 function renderUser() {
   const user = state.currentUser;
-  elements.currentUsername.textContent = user?.username || "未登录";
+  const username = user?.username || "我";
+  elements.currentUsername.textContent = username;
   elements.currentUserAvatar.innerHTML = avatarMarkup(
     user?.avatar_url,
-    user?.username,
-    firstText(user?.username, "我"),
+    username,
+    firstText(username, "我"),
     "large",
   );
+  if (elements.settingsUserAvatar) {
+    elements.settingsUserAvatar.innerHTML = avatarMarkup(
+      user?.avatar_url,
+      username,
+      firstText(username, "我"),
+      "large",
+    );
+  }
+  if (elements.userProfileUsernameInput) {
+    elements.userProfileUsernameInput.value = username;
+  }
 }
 
 function renderCharacterPanel() {
@@ -1034,6 +1007,20 @@ async function uploadUserAvatar(file) {
   setStatus("用户头像已更新");
 }
 
+async function saveUserProfile() {
+  const username = elements.userProfileUsernameInput.value.trim();
+  if (!username) {
+    window.alert("显示 ID / 用户名不能为空。");
+    return;
+  }
+  state.currentUser = await requestJson("/auth/me", {
+    method: "PUT",
+    body: JSON.stringify({ username }),
+  });
+  renderUser();
+  setStatus("用户信息已更新");
+}
+
 async function uploadCharacterAvatar(file) {
   const characterId = getCharacterId();
   await uploadFile(`/characters/${encodeURIComponent(characterId)}/avatar`, file);
@@ -1046,27 +1033,9 @@ async function uploadCharacterAvatar(file) {
   setStatus("角色头像已更新");
 }
 
-async function afterAuth(payload) {
-  state.token = payload.access_token;
-  window.localStorage.setItem(TOKEN_KEY, state.token);
-  state.currentUser = payload.user;
-  setAuthenticated(true);
-  renderUser();
-  await initializeApp();
-}
-
-function logout(callServer = true, message = "") {
-  if (callServer && state.token) {
-    requestJson("/auth/logout", { method: "POST" }).catch(() => {});
-  }
-  state.token = "";
-  state.currentUser = null;
-  window.localStorage.removeItem(TOKEN_KEY);
-  setAuthenticated(false);
-  showAuthMode(state.hasUser ? "login" : "setup", message);
-}
-
 async function initializeApp() {
+  window.localStorage.removeItem("roleChatbotToken");
+  setAuthenticated(true);
   setDebugMode(window.localStorage.getItem("roleChatbotDebugMode") === "1");
   setVoiceEnabled(window.localStorage.getItem("roleChatbotVoice") === "1");
   await loadMe();
@@ -1084,46 +1053,6 @@ async function initializeApp() {
   startNewSession();
 }
 
-elements.setupForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (elements.setupPasswordInput.value !== elements.setupPasswordConfirmInput.value) {
-    showAuthError("两次输入的密码不一致");
-    return;
-  }
-  try {
-    const payload = await requestJson("/auth/setup", {
-      method: "POST",
-      body: JSON.stringify({
-        username: elements.setupUsernameInput.value.trim(),
-        password: elements.setupPasswordInput.value,
-      }),
-      skipAuthRedirect: true,
-    });
-    state.hasUser = true;
-    await afterAuth(payload);
-  } catch (error) {
-    showAuthError(error);
-  }
-});
-
-elements.loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const payload = await requestJson("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({
-        username: elements.loginUsernameInput.value.trim(),
-        password: elements.loginPasswordInput.value,
-      }),
-      skipAuthRedirect: true,
-    });
-    await afterAuth(payload);
-  } catch (error) {
-    showAuthError(error);
-  }
-});
-
-elements.logoutButton.addEventListener("click", () => logout(true));
 elements.userAvatarInput.addEventListener("change", async () => {
   const file = elements.userAvatarInput.files?.[0];
   if (!file) {
@@ -1135,6 +1064,27 @@ elements.userAvatarInput.addEventListener("change", async () => {
     window.alert(friendlyError(error));
   } finally {
     elements.userAvatarInput.value = "";
+  }
+});
+elements.settingsUserAvatarInput.addEventListener("change", async () => {
+  const file = elements.settingsUserAvatarInput.files?.[0];
+  if (!file) {
+    return;
+  }
+  try {
+    await uploadUserAvatar(file);
+  } catch (error) {
+    window.alert(friendlyError(error));
+  } finally {
+    elements.settingsUserAvatarInput.value = "";
+  }
+});
+elements.saveUserProfileButton.addEventListener("click", async () => {
+  try {
+    await saveUserProfile();
+  } catch (error) {
+    window.alert(friendlyError(error));
+    setStatus("Error");
   }
 });
 elements.characterAvatarInput.addEventListener("change", async () => {
@@ -1515,22 +1465,12 @@ elements.sessionList.addEventListener("click", async (event) => {
 });
 
 async function boot() {
-  setAuthenticated(false);
+  setAuthenticated(true);
   try {
-    const status = await requestJson("/auth/status", { skipAuthRedirect: true });
-    state.hasUser = Boolean(status.has_user);
-    if (!state.hasUser) {
-      showAuthMode("setup");
-      return;
-    }
-    if (!state.token) {
-      showAuthMode("login");
-      return;
-    }
-    setAuthenticated(true);
     await initializeApp();
   } catch (error) {
-    logout(false, friendlyError(error));
+    setStatus("Error");
+    elements.messages.innerHTML = `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`;
   }
 }
 

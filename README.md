@@ -98,6 +98,8 @@ python -m pip install -r requirements.txt
 * Adminer 数据库管理页面
 * `frontend/simple_web` 简单网页前端
 
+本地网页不需要注册、登录、密码或 JWT。后端启动后会自动确保 `users` 表里有一个默认本地用户；打开网页会直接进入主界面。用户可以在设置里修改显示 ID / 用户名，也可以上传本地头像。数据库主键 `users.id` 不建议手动修改；如果要清空本地用户数据，需要手动清理数据库或后续提供专门工具。
+
 网页入口：
 
 ```text
@@ -159,8 +161,6 @@ PERSONA_EDITOR_LLM_PROVIDER="openai"
 PERSONA_EDITOR_OPENAI_API_KEY="your_api_key_here"
 PERSONA_EDITOR_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
 PERSONA_EDITOR_OPENAI_MODEL="your_persona_editor_model_here"
-
-JWT_SECRET_KEY="change_this_to_a_long_random_string"
 ```
 
 注意：
@@ -169,6 +169,7 @@ JWT_SECRET_KEY="change_this_to_a_long_random_string"
 * 不要提交 `backend/.env`。
 * 如果不使用人设编辑功能，也建议先把 `PERSONA_EDITOR_*` 配好，避免调用相关接口时报错。
 * 本项目不使用 mock LLM。模型配置错误时会直接报错。
+* 本地单用户模式不需要配置 JWT 登录密钥。
 
 ---
 
@@ -308,6 +309,17 @@ docker compose down -v
 POST /chat/text
 POST /chat
 ```
+
+本地用户接口：
+
+```text
+GET  /auth/me
+PUT  /auth/me
+POST /auth/me/avatar
+POST /auth/logout
+```
+
+`/auth/setup` 和 `/auth/login` 仅保留兼容，不再作为主流程使用，也不再验证密码。
 
 关系记忆接口：
 

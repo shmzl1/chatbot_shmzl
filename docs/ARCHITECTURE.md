@@ -56,6 +56,17 @@ docker compose --project-directory . -f deploy/docker/docker-compose.yml ...
 
 ## 数据流
 
+认证与本地用户：
+
+```text
+frontend
+  -> GET /auth/me
+  -> services.auth_service.ensure_default_user
+  -> users singleton row
+```
+
+项目是 Windows 本地单用户模式，不需要注册、登录、密码或 JWT。后端启动和首次读取 `/auth/me` 时会自动创建默认本地用户。`get_current_user` 保留为依赖函数名，但只返回默认用户，不再检查 Bearer Token。用户可通过 `PUT /auth/me` 修改显示 ID / 用户名，通过 `POST /auth/me/avatar` 上传头像。数据库主键 `users.id` 不应修改；清空用户数据需要手动清理数据库或后续工具。
+
 普通聊天：
 
 ```text
