@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Role Chatbot</title>
     <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./diary.css" />
   </head>
   <body class="user-mode authenticated">
     <div id="appShell" class="app-shell">
@@ -27,6 +28,13 @@
             </label>
           </div>
         </section>
+
+        <nav class="main-nav" aria-label="主功能">
+          <button id="navChatButton" class="active" type="button" data-view="chat">聊天</button>
+          <button id="navDiaryButton" type="button" data-view="diary">日记</button>
+          <button id="navScheduleButton" type="button" data-view="schedule">日程</button>
+          <button id="navSettingsButton" type="button" data-view="settings">设置</button>
+        </nav>
 
         <section class="character-panel">
           <div id="currentCharacterAvatar" class="avatar-host"></div>
@@ -53,7 +61,7 @@
         <div id="sessionList" class="session-list"></div>
       </aside>
 
-      <main class="chat-pane">
+      <main id="chatView" class="chat-pane">
         <header class="chat-header">
           <div>
             <p class="eyebrow" id="statusText">Ready</p>
@@ -85,6 +93,73 @@
             <button id="sendButton" type="submit">发送</button>
           </div>
         </form>
+      </main>
+
+      <main id="diaryView" class="diary-view hidden">
+        <section class="diary-list-pane">
+          <div class="diary-toolbar">
+            <div>
+              <p class="eyebrow">Diary</p>
+              <h2>日记</h2>
+            </div>
+            <button id="newDiaryButton" class="icon-button" type="button" title="新日记">+</button>
+          </div>
+          <form id="diaryFilterForm" class="diary-filter">
+            <input id="diaryKeywordInput" type="search" placeholder="搜索" />
+            <div class="diary-filter-grid">
+              <input id="diaryDateFromInput" type="date" />
+              <input id="diaryDateToInput" type="date" />
+            </div>
+            <div class="diary-filter-grid">
+              <input id="diaryMoodFilterInput" type="text" placeholder="心情" />
+              <input id="diaryTagFilterInput" type="text" placeholder="标签" />
+            </div>
+            <button class="wide-button secondary" type="submit">筛选</button>
+          </form>
+          <div id="diaryEntryList" class="diary-entry-list"></div>
+        </section>
+
+        <section class="diary-editor-pane">
+          <header class="diary-editor-header">
+            <div>
+              <p class="eyebrow" id="diaryStatusText">Draft</p>
+              <h2 id="diaryEditorTitle">新日记</h2>
+            </div>
+            <div class="diary-editor-actions">
+              <button id="readDiaryWithCharacterButton" class="text-button" type="button">让角色读这篇日记</button>
+              <button id="deleteDiaryButton" class="text-button danger" type="button">删除</button>
+              <button id="saveDiaryButton" class="wide-button" type="button">保存</button>
+            </div>
+          </header>
+          <div class="diary-editor-fields">
+            <input id="diaryTitleInput" type="text" maxlength="120" placeholder="标题" />
+            <div class="diary-meta-grid">
+              <label>
+                <span>日期</span>
+                <input id="diaryDateInput" type="date" />
+              </label>
+              <label>
+                <span>心情</span>
+                <input id="diaryMoodInput" type="text" maxlength="40" placeholder="例如：烦、累、还行" />
+              </label>
+              <label>
+                <span>标签</span>
+                <input id="diaryTagsInput" type="text" placeholder="逗号分隔" />
+              </label>
+            </div>
+            <textarea id="diaryContentInput" rows="16" maxlength="20000" placeholder="写今天发生的事..."></textarea>
+          </div>
+          <section class="diary-images-panel">
+            <div class="section-title-row">
+              <h3>图片</h3>
+              <label class="upload-link">
+                上传图片
+                <input id="diaryImageInput" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+              </label>
+            </div>
+            <div id="diaryImageList" class="diary-image-list"></div>
+          </section>
+        </section>
       </main>
 
       <aside class="debug-pane">
@@ -308,6 +383,7 @@
       </aside>
     </div>
 
+    <script src="./diary.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

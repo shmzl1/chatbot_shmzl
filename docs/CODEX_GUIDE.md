@@ -90,9 +90,17 @@ docker compose --project-directory . -f deploy/docker/docker-compose.yml ...
 
 ## 本地用户
 
-项目是 Windows 本地单用户模式，不再需要注册、登录、密码或 JWT 登录锁。后端会自动确保 `users` 表里有一个默认本地用户；`get_current_user` 只是兼容依赖名，必须直接返回默认用户，不能因为缺少 Bearer Token 返回 401。
+项目是 Windows 本地单用户模式，不再需要注册、登录、密码、JWT 或 Bearer Token 登录锁。后端会自动确保 `users` 表里有一个默认本地用户；`get_current_user` 只是兼容依赖名，必须直接返回默认用户。
 
 用户可以通过 `/auth/me` 查看和修改显示 ID / 用户名，通过 `/auth/me/avatar` 上传头像。不要修改 `users.id`，不要恢复密码登录、JWT 校验或前端登录页。如果需要清空本地用户数据，应手动清理数据库或另做专门工具。
+
+## 日记
+
+日记模块位于 `backend/modules/diary/`，第一阶段只做本地日记 CRUD、图片附件和用户主动选择后的聊天上下文。不要把日记默认塞进 prompt，不要从日记自动写入长期记忆。
+
+日记图片保存到 `uploads/diary/images/`，数据库只保存附件元数据和 public URL。删除日记或图片采用软删除。
+
+聊天请求只有显式传入 `diary_entry_id` 时，才能通过 `modules.diary.context` 读取该篇日记。普通聊天不应读取全部日记。
 
 ## relationship_memory
 
@@ -102,7 +110,7 @@ docker compose --project-directory . -f deploy/docker/docker-compose.yml ...
 
 记忆必须分层读取：`is_pinned=true` 或 `read_policy=always` 的 pinned 记忆每次 prompt 必读，不参与 topK；普通记忆只有 `status=active`、`read_policy=relevant` 且未过期时才按 topK 进入 prompt；`archived`、`superseded`、`deleted`、`read_policy=never` 或已过期的记忆不能进入 prompt。AI 不应自动删除或覆盖 pinned 记忆，未来只能由用户在管理界面显式维护。
 
-当前阶段不要在 relationship_memory 中新增日程、日记、QQ/微信接入或云部署能力。
+不要在 relationship_memory 中直接保存日记原文。日记或日程如果要生成长期记忆，必须先成为候选记忆，并经过用户确认。
 
 ## 人设编辑
 

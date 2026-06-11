@@ -7,6 +7,7 @@ from modules.auth.api import router as auth_router
 from modules.chat.api import router as chat_router
 from modules.characters.api import router as character_router
 from modules.debug.api import router as debug_router
+from modules.diary.api import router as diary_router
 from modules.health.api import router as health_router
 from modules.knowledge.api import router as knowledge_router
 from modules.memory.api import router as memory_router
@@ -27,6 +28,7 @@ app.include_router(auth_router)
 app.include_router(character_router)
 app.include_router(chat_router)
 app.include_router(debug_router)
+app.include_router(diary_router)
 app.include_router(feedback_router)
 app.include_router(knowledge_router)
 app.include_router(memory_router)

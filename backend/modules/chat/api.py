@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends
 from core.config import settings
 from core.schemas import ChatRequest, ChatTextRequest, ChatTextResponse, UserRecord
 from modules.characters.service import character_service
+from modules.diary.context import build_diary_context_for_chat
+from modules.relationship_memory.service import relationship_memory_service
 from services.auth_service import get_current_user
 from services.database_service import database_service
 from services.emotion_service import emotion_service
@@ -13,7 +15,6 @@ from services.retrieval_service import retrieval_service
 from services.rewrite_service import rewrite_service
 from services.style_judge_service import style_judge_service
 from services.tts_service import tts_service
-from modules.relationship_memory.service import relationship_memory_service
 
 
 router = APIRouter(tags=["chat"])
@@ -24,7 +25,7 @@ def chat_text(
     request: ChatTextRequest,
     current_user: UserRecord = Depends(get_current_user),
 ) -> ChatTextResponse:
-    return _run_chat(request=request, voice=False)
+    return _run_chat(request=request, voice=False, current_user=current_user)
 
 
 @router.post("/chat", response_model=ChatTextResponse)
@@ -32,10 +33,10 @@ def chat(
     request: ChatRequest,
     current_user: UserRecord = Depends(get_current_user),
 ) -> ChatTextResponse:
-    return _run_chat(request=request, voice=request.voice)
+    return _run_chat(request=request, voice=request.voice, current_user=current_user)
 
 
-def _run_chat(request: ChatTextRequest, voice: bool) -> ChatTextResponse:
+def _run_chat(request: ChatTextRequest, voice: bool, current_user: UserRecord) -> ChatTextResponse:
     character = character_service.get_character(request.character_id)
     retrieval_context = retrieval_service.retrieve(character.id, request.message)
     retrieval_context["lore"].extend(
@@ -75,6 +76,13 @@ def _run_chat(request: ChatTextRequest, voice: bool) -> ChatTextResponse:
     retrieval_context["memories"] = memory_hits
     retrieval_context["relationship_memories"] = relationship_memory_hits
     retrieval_context["history"] = history
+    diary_context = ""
+    if request.diary_entry_id is not None:
+        diary_context = build_diary_context_for_chat(
+            user_id=current_user.id,
+            entry_id=request.diary_entry_id,
+        )
+        retrieval_context["diary_context"] = diary_context
     prompt = build_chat_prompt(character, request.message, retrieval_context)
     generation = llm_service.generate_candidates(
         prompt,
@@ -132,6 +140,8 @@ def _run_chat(request: ChatTextRequest, voice: bool) -> ChatTextResponse:
         **retrieval_service.used_ids(retrieval_context),
         "used_memories": [hit["id"] for hit in memory_hits],
         "used_relationship_memories": [hit["id"] for hit in relationship_memory_hits],
+        "diary_entry_id": request.diary_entry_id,
+        "diary_context_used": bool(diary_context),
         "history_count": len(history),
         "memory_suggestions": memory_suggestions,
         "style_judge": {

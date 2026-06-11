@@ -104,8 +104,6 @@ class Settings:
     style_score_threshold: float = float(os.getenv("STYLE_SCORE_THRESHOLD", "8.0"))
     gptsovits_base_url: str = _gptsovits_base_url()
     gptsovits_timeout_seconds: float = float(os.getenv("GPTSOVITS_TIMEOUT_SECONDS", "120"))
-    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "change_me_dev_jwt_secret")
-    jwt_expire_minutes: int = int(os.getenv("JWT_EXPIRE_MINUTES", "10080"))
     avatar_max_size_mb: int = int(os.getenv("AVATAR_MAX_SIZE_MB", "5"))
 
     def get_llm_config(self, profile: str) -> dict:

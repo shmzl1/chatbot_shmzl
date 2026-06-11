@@ -132,6 +132,7 @@ class ChatTextRequest(BaseModel):
     character_id: str = "role01"
     message: str = Field(..., min_length=1, max_length=2000)
     session_id: Optional[str] = None
+    diary_entry_id: Optional[int] = None
     debug_prompt: bool = False
 
 
@@ -287,16 +288,6 @@ class TurnFeedbackResponse(BaseModel):
     created_at: str
 
 
-class UserLoginRequest(BaseModel):
-    username: str = Field(..., min_length=1, max_length=50)
-    password: str = ""
-
-
-class UserSetupRequest(BaseModel):
-    username: str = Field(default="我", min_length=1, max_length=50)
-    password: str = ""
-
-
 class UserProfileUpdateRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=50)
 
@@ -321,12 +312,6 @@ class UserPublic(BaseModel):
     email: Optional[str] = None
     avatar_url: Optional[str] = None
     created_at: str
-
-
-class AuthTokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserPublic
 
 
 class AvatarUploadResponse(BaseModel):

@@ -65,7 +65,7 @@ frontend
   -> users singleton row
 ```
 
-项目是 Windows 本地单用户模式，不需要注册、登录、密码或 JWT。后端启动和首次读取 `/auth/me` 时会自动创建默认本地用户。`get_current_user` 保留为依赖函数名，但只返回默认用户，不再检查 Bearer Token。用户可通过 `PUT /auth/me` 修改显示 ID / 用户名，通过 `POST /auth/me/avatar` 上传头像。数据库主键 `users.id` 不应修改；清空用户数据需要手动清理数据库或后续工具。
+项目是 Windows 本地单用户模式，不需要注册、登录、密码、JWT 或 Bearer Token。后端启动和首次读取 `/auth/me` 时会自动创建默认本地用户。`get_current_user` 保留为依赖函数名，但只返回默认用户。用户可通过 `PUT /auth/me` 修改显示 ID / 用户名，通过 `POST /auth/me/avatar` 上传头像。数据库主键 `users.id` 不应修改；清空用户数据需要手动清理数据库或后续工具。
 
 普通聊天：
 
@@ -76,6 +76,17 @@ frontend
   -> retrieval / long_term_memories / relationship_memory / chat LLM profile
   -> database
 ```
+
+日记：
+
+```text
+frontend diary page
+  -> modules.diary.api
+  -> diary_entries / diary_attachments
+  -> uploads/diary/images
+```
+
+聊天默认不会读取日记。只有请求显式传入 `diary_entry_id` 时，`modules.diary.context` 才会读取当前用户的那一篇日记，并加入 prompt 的“用户主动提供的日记上下文”。日记不会自动写入长期记忆。
 
 关系记忆：
 

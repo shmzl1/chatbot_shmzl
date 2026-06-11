@@ -1,11 +1,9 @@
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import HTTPException
 
-from core.schemas import UserLoginRequest, UserPublic, UserRecord, UserSetupRequest
+from core.schemas import UserPublic, UserRecord
 from services.database_service import database_service
 
 
-bearer_scheme = HTTPBearer(auto_error=False)
 DEFAULT_LOCAL_USERNAME = "我"
 DEFAULT_LOCAL_EMAIL = None
 DEFAULT_LOCAL_PASSWORD_HASH = ""
@@ -44,15 +42,6 @@ class AuthService:
             return user
         return database_service.update_user_profile(user.id, self._clean_username(username))
 
-    def setup(self, request: UserSetupRequest) -> tuple[str, UserRecord]:
-        user = self.ensure_default_user()
-        if request.username:
-            user = self.update_default_user_profile(request.username)
-        return "", user
-
-    def login(self, request: UserLoginRequest) -> tuple[str, UserRecord]:
-        return "", self.ensure_default_user()
-
     def _clean_username(self, username: str) -> str:
         value = username.strip()
         if not value:
@@ -62,9 +51,7 @@ class AuthService:
         return value
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> UserRecord:
+def get_current_user() -> UserRecord:
     return auth_service.get_default_user()
 
 

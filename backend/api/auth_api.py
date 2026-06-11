@@ -2,13 +2,10 @@ from fastapi import APIRouter, Depends, File, UploadFile
 
 from core.schemas import (
     AuthStatusResponse,
-    AuthTokenResponse,
     AvatarUploadResponse,
-    UserLoginRequest,
     UserProfileUpdateRequest,
     UserPublic,
     UserRecord,
-    UserSetupRequest,
 )
 from services.auth_service import auth_service, get_current_user, public_user
 from services.avatar_service import avatar_service
@@ -22,18 +19,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def status() -> AuthStatusResponse:
     auth_service.ensure_default_user()
     return AuthStatusResponse(has_user=True)
-
-
-@router.post("/setup", response_model=AuthTokenResponse)
-def setup(request: UserSetupRequest) -> AuthTokenResponse:
-    token, user = auth_service.setup(request)
-    return AuthTokenResponse(access_token=token, user=public_user(user))
-
-
-@router.post("/login", response_model=AuthTokenResponse)
-def login(request: UserLoginRequest) -> AuthTokenResponse:
-    token, user = auth_service.login(request)
-    return AuthTokenResponse(access_token=token, user=public_user(user))
 
 
 @router.get("/me", response_model=UserPublic)

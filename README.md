@@ -1,6 +1,6 @@
 # 虚拟人物陪伴系统
 
-本项目是本地运行的虚拟人物聊天系统。运行入口集中在 `backend/modules/*`，角色读取、校验、头像和角色包管理都走 `backend/modules/characters`。
+本项目是本地运行的虚拟人物陪伴系统。主功能入口是聊天、日记、日程和设置；角色与记忆是嵌入能力，不再作为独立主功能。运行入口集中在 `backend/modules/*`，角色读取、校验、头像和角色包管理都走 `backend/modules/characters`。
 
 ## 当前结构
 
@@ -310,16 +310,33 @@ POST /chat/text
 POST /chat
 ```
 
+传入 `diary_entry_id` 时，聊天只读取用户主动选择的那一篇日记；默认聊天不会读取任何日记。
+
 本地用户接口：
 
 ```text
+GET  /auth/status
 GET  /auth/me
 PUT  /auth/me
 POST /auth/me/avatar
 POST /auth/logout
 ```
 
-`/auth/setup` 和 `/auth/login` 仅保留兼容，不再作为主流程使用，也不再验证密码。
+项目已删除注册、密码登录、JWT 和 Bearer Token 登录锁。前端打开 `/app/` 后直接使用默认本地用户。
+
+日记接口：
+
+```text
+GET    /diary/entries
+POST   /diary/entries
+GET    /diary/entries/{entry_id}
+PUT    /diary/entries/{entry_id}
+DELETE /diary/entries/{entry_id}
+POST   /diary/entries/{entry_id}/images
+DELETE /diary/images/{image_id}
+```
+
+日记图片保存在 `uploads/diary/images/`，数据库只保存元数据和 public URL，不保存 base64。删除日记和图片采用软删除。
 
 关系记忆接口：
 

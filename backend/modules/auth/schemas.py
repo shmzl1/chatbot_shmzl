@@ -1,11 +1,9 @@
-"""Auth schema compatibility exports."""
+"""Auth schema exports for local default user mode."""
 
-from core.schemas import AuthStatusResponse, AuthTokenResponse, UserLoginRequest, UserSetupRequest
+from core.schemas import AuthStatusResponse, UserProfileUpdateRequest, UserPublic
 
 __all__ = [
     "AuthStatusResponse",
-    "AuthTokenResponse",
-    "UserLoginRequest",
-    "UserSetupRequest",
+    "UserProfileUpdateRequest",
+    "UserPublic",
 ]
-

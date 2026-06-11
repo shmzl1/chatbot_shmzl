@@ -1,22 +1,25 @@
 # diary 模块
 
-`diary` 是日记功能预留模块。
+`diary` 负责本地单用户日记 MVP：日记 CRUD、图片附件元数据、软删除，以及用户主动选择某篇日记后的聊天上下文构造。
 
-## 当前状态
+## 数据边界
 
-本轮项目没有实现日记系统。
+- 日记正文保存在 PostgreSQL 的 `diary_entries`。
+- 图片文件保存到 `uploads/diary/images/`，数据库只保存文件名、路径、URL、MIME 和大小，不保存 base64。
+- 删除日记或图片只做软删除。
 
-该目录用于后续承载日记读取、摘要、权限和相关 API。
+## 聊天边界
 
-## 未来职责
+聊天默认不会读取任何日记。只有前端传入明确的 `diary_entry_id` 时，`modules.diary.context` 才会读取该篇日记并加入 prompt 的“用户主动提供的日记上下文”。
 
-- 读取用户授权的日记内容。
-- 提取可用于陪伴的长期信息。
-- 控制隐私和读取范围。
-- 与聊天或记忆模块协作。
+日记不会自动写入长期记忆。若未来要把日记内容变成关系记忆，必须走用户确认流程。
 
-## 注意事项
+## 接口
 
-- 当前不要新增日记数据库表。
-- 当前不要接入前端日记功能。
-- 不要把私人日记内容提交到 Git。
+- `GET /diary/entries`
+- `POST /diary/entries`
+- `GET /diary/entries/{entry_id}`
+- `PUT /diary/entries/{entry_id}`
+- `DELETE /diary/entries/{entry_id}`
+- `POST /diary/entries/{entry_id}/images`
+- `DELETE /diary/images/{image_id}`

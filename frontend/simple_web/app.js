@@ -3,6 +3,7 @@ const state = {
   currentCharacter: null,
   currentSessionId: null,
   currentTurnId: null,
+  currentView: "chat",
   memorySuggestions: [],
   personaReview: null,
   personaEditorHistory: [],
@@ -68,7 +69,13 @@ const elements = {
   memoryTagsInput: document.querySelector("#memoryTagsInput"),
   messageInput: document.querySelector("#messageInput"),
   messages: document.querySelector("#messages"),
+  chatView: document.querySelector("#chatView"),
   newSessionButton: document.querySelector("#newSessionButton"),
+  navChatButton: document.querySelector("#navChatButton"),
+  navDiaryButton: document.querySelector("#navDiaryButton"),
+  navScheduleButton: document.querySelector("#navScheduleButton"),
+  navSettingsButton: document.querySelector("#navSettingsButton"),
+  diaryView: document.querySelector("#diaryView"),
   openPersonaEditorButton: document.querySelector("#openPersonaEditorButton"),
   applyPersonaButton: document.querySelector("#applyPersonaButton"),
   clearPersonaEditorButton: document.querySelector("#clearPersonaEditorButton"),
@@ -179,6 +186,29 @@ function setAuthenticated(authenticated) {
 
 function setStatus(text) {
   elements.statusText.textContent = text;
+}
+
+function switchView(view) {
+  if (view === "settings") {
+    setSettingsOpen(true);
+    return;
+  }
+  if (view === "schedule") {
+    setStatus("Schedule is not available yet");
+    return;
+  }
+  state.currentView = view;
+  elements.chatView.classList.toggle("hidden", view !== "chat");
+  elements.diaryView.classList.toggle("hidden", view !== "diary");
+  elements.navChatButton.classList.toggle("active", view === "chat");
+  elements.navDiaryButton.classList.toggle("active", view === "diary");
+  elements.navScheduleButton.classList.toggle("active", view === "schedule");
+  elements.navSettingsButton.classList.toggle("active", false);
+  if (view === "diary") {
+    window.diaryModule?.refresh?.().catch((error) => {
+      window.alert(friendlyError(error));
+    });
+  }
 }
 
 function setDebugMode(enabled) {
@@ -623,6 +653,7 @@ function renderDebug(payload) {
     ["Dialogues", debug.used_dialogues],
     ["Reactions", debug.used_reactions],
     ["Memories", debug.used_memories],
+    ["Diary", debug.diary_context_used ? [debug.diary_entry_id] : []],
     ["History", debug.history_count == null ? [] : [debug.history_count]],
   ];
   elements.retrievalList.innerHTML = retrievalRows
@@ -959,7 +990,7 @@ function startNewSession() {
   elements.messageInput.focus();
 }
 
-async function sendMessage(message) {
+async function sendMessage(message, diaryEntryId = null) {
   const voice = elements.voiceToggle.checked;
   const body = {
     character_id: getCharacterId(),
@@ -971,6 +1002,9 @@ async function sendMessage(message) {
   }
   if (state.currentSessionId) {
     body.session_id = state.currentSessionId;
+  }
+  if (diaryEntryId != null) {
+    body.diary_entry_id = Number(diaryEntryId);
   }
 
   setStatus("Sending");
@@ -990,6 +1024,38 @@ async function sendMessage(message) {
   await loadSession(payload.session_id);
   renderDebug(payload);
   setStatus(payload.debug?.mode || "Ready");
+}
+
+async function submitChatMessage(message, diaryEntryId = null) {
+  if (!message) {
+    return;
+  }
+  const user = state.currentUser || {};
+  const character = state.currentCharacter || {};
+  elements.messages.insertAdjacentHTML(
+    "beforeend",
+    `<article class="message-pair pending">
+      <div class="message-row user">
+        ${avatarMarkup(user.avatar_url, user.username, firstText(user.username, "我"))}
+        <div class="bubble user">${escapeHtml(message)}</div>
+      </div>
+      <div class="message-row assistant">
+        ${avatarMarkup(character.avatar_url, character.display_name, firstText(character.display_name, "AI"))}
+        <div class="bubble assistant">...</div>
+      </div>
+    </article>`,
+  );
+  elements.messages.scrollTop = elements.messages.scrollHeight;
+
+  try {
+    await sendMessage(message, diaryEntryId);
+  } catch (error) {
+    setStatus("Error");
+    elements.messages.insertAdjacentHTML("beforeend", `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`);
+  } finally {
+    elements.sendButton.disabled = false;
+    elements.messageInput.focus();
+  }
 }
 
 async function uploadFile(url, file) {
@@ -1034,7 +1100,6 @@ async function uploadCharacterAvatar(file) {
 }
 
 async function initializeApp() {
-  window.localStorage.removeItem("roleChatbotToken");
   setAuthenticated(true);
   setDebugMode(window.localStorage.getItem("roleChatbotDebugMode") === "1");
   setVoiceEnabled(window.localStorage.getItem("roleChatbotVoice") === "1");
@@ -1050,6 +1115,11 @@ async function initializeApp() {
   renderSelectedPersonaTurns();
   renderPersonaEditorChat();
   renderPersonaReview(null);
+  await window.diaryModule?.init?.({
+    switchView,
+    submitChatMessage,
+    setStatus,
+  });
   startNewSession();
 }
 
@@ -1107,34 +1177,13 @@ elements.chatForm.addEventListener("submit", async (event) => {
     return;
   }
   elements.messageInput.value = "";
-  const user = state.currentUser || {};
-  const character = state.currentCharacter || {};
-  elements.messages.insertAdjacentHTML(
-    "beforeend",
-    `<article class="message-pair pending">
-      <div class="message-row user">
-        ${avatarMarkup(user.avatar_url, user.username, firstText(user.username, "我"))}
-        <div class="bubble user">${escapeHtml(message)}</div>
-      </div>
-      <div class="message-row assistant">
-        ${avatarMarkup(character.avatar_url, character.display_name, firstText(character.display_name, "AI"))}
-        <div class="bubble assistant">...</div>
-      </div>
-    </article>`,
-  );
-  elements.messages.scrollTop = elements.messages.scrollHeight;
-
-  try {
-    await sendMessage(message);
-  } catch (error) {
-    setStatus("Error");
-    elements.messages.insertAdjacentHTML("beforeend", `<div class="error-box">${escapeHtml(friendlyError(error))}</div>`);
-  } finally {
-    elements.sendButton.disabled = false;
-    elements.messageInput.focus();
-  }
+  await submitChatMessage(message);
 });
 
+elements.navChatButton.addEventListener("click", () => switchView("chat"));
+elements.navDiaryButton.addEventListener("click", () => switchView("diary"));
+elements.navScheduleButton.addEventListener("click", () => switchView("schedule"));
+elements.navSettingsButton.addEventListener("click", () => switchView("settings"));
 elements.newSessionButton.addEventListener("click", startNewSession);
 elements.openPersonaEditorButton.addEventListener("click", () => setPersonaEditorOpen(true));
 elements.closePersonaEditorButton.addEventListener("click", () => setPersonaEditorOpen(false));

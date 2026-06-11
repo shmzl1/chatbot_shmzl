@@ -8,7 +8,6 @@ def _lines(items: Iterable[str]) -> str:
     values = [item for item in items if item]
     if not values:
         return "- 未配置"
-
     return "\n".join(f"- {item}" for item in values)
 
 
@@ -75,7 +74,7 @@ def _split_pinned_hits(hits: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]]
 def build_chat_prompt(
     character: CharacterCard,
     user_message: str,
-    retrieval_context: Dict[str, List[Dict[str, Any]]] | None = None,
+    retrieval_context: Dict[str, Any] | None = None,
 ) -> str:
     reply_patterns = json.dumps(
         character.reply_patterns,
@@ -89,12 +88,13 @@ def build_chat_prompt(
     memory_hits = retrieval_context.get("memories", [])
     relationship_memory_hits = retrieval_context.get("relationship_memories", [])
     history = retrieval_context.get("history", [])
+    diary_context = str(retrieval_context.get("diary_context") or "").strip()
     pinned_memory_hits, relevant_memory_hits = _split_pinned_hits(memory_hits)
     pinned_relationship_hits, relevant_relationship_hits = _split_pinned_hits(relationship_memory_hits)
 
     return f"""请根据角色卡，为用户输入生成 3 个候选回复。
-
-固定核心人设每次必须完整读取，不允许被普通记忆或可变样例覆盖。
+固定核心人设每次必须完整读取，不允许被普通记忆、可变样例、日记或日程覆盖。
+聊天默认不能读取全部日记；只有“用户主动提供的日记上下文”非空时，才可以引用那一篇日记。
 
 角色 ID：{character.id}
 角色名：{character.display_name}
@@ -123,7 +123,7 @@ def build_chat_prompt(
 相关背景检索补充：
 {_format_hits(lore_hits, ("content", "tags"))}
 
-相似说话规律：
+相似说话规则：
 {_format_hits(dialogue_hits, ("style_summary", "rewrite_rule", "emotion", "intent"))}
 
 当前场景反应规则：
@@ -141,19 +141,22 @@ pinned / always_read 关系记忆（每次必读，不参与 topK）：
 普通 active 关系记忆 topK：
 {_format_hits(relevant_relationship_hits, ("content", "memory_type", "importance", "source_type", "evidence"))}
 
+用户主动提供的日记上下文：
+{diary_context or "- 未选择日记"}
+
 最近聊天历史：
 {_format_history(history)}
 
-用户输入：
-{user_message}
+用户输入：{user_message}
 
 要求：
 1. 不要说自己是 AI。
 2. 不要说自己在扮演角色。
 3. 不要复读原始台词。
 4. 回复要短，适合后续 TTS 朗读。
-5. 生成 3 个不同候选，emotion 只能从 neutral、soft、angry、tired、teasing、serious 中选择。
-6. 只输出严格 JSON，不要输出 Markdown。
+5. 如果使用日记上下文，只能围绕用户主动选择的这一篇日记回应，不要声称读过其他日记。
+6. 生成 3 个不同候选，emotion 只能从 neutral、soft、angry、tired、teasing、serious 中选择。
+7. 只输出严格 JSON，不要输出 Markdown。
 
 输出格式：
 {{

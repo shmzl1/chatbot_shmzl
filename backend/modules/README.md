@@ -5,7 +5,9 @@
 ## 当前重点模块
 
 - `characters`：角色系统唯一入口。
+- `auth`：本地默认用户入口，不提供登录锁。
 - `chat`：普通聊天入口，只使用 `CHAT_*`。
+- `diary`：日记 CRUD、图片附件和用户主动选择后的日记上下文。
 - `persona_review`：人设编辑闭环，只使用 `PERSONA_EDITOR_*`。
 - `relationship_memory`：关系长期上下文，保存到 `relationship_memory_events`。
 - `voice`：GPT-SoVITS 语音调用。
