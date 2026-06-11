@@ -82,7 +82,6 @@ class Settings:
     database_url: str = _database_url()
     outputs_dir: Path = _path_from_env("OUTPUTS_DIR", BASE_DIR / "outputs")
     upload_dir: Path = _path_from_env("UPLOAD_DIR", BASE_DIR / "data" / "uploads")
-    frontend_dir: Path = _path_from_env("FRONTEND_DIR", PROJECT_ROOT / "frontend" / "simple_web")
     default_character_id: str = os.getenv("DEFAULT_CHARACTER_ID", "role01")
     chat_llm_provider: str | None = _optional_env("CHAT_LLM_PROVIDER")
     chat_openai_api_key: str | None = _optional_env("CHAT_OPENAI_API_KEY")

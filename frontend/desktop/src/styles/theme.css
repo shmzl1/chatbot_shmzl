@@ -1,0 +1,16 @@
+:root {
+  color-scheme: light;
+  --app-bg: #f4efe5;
+  --surface: #fffaf1;
+  --surface-2: #f8f1e5;
+  --surface-3: #ede7d8;
+  --ink: #2b2924;
+  --muted: #776f63;
+  --line: rgba(83, 76, 64, 0.16);
+  --green: #62775a;
+  --green-2: #7e8d68;
+  --blue: #617b95;
+  --rose: #b78085;
+  --gold: #bc8b4f;
+  --danger: #a85a52;
+}

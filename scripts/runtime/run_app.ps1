@@ -7,7 +7,7 @@ $ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
 $BackendDir = Join-Path $ProjectRoot "backend"
 $ComposeFile = Join-Path $ProjectRoot "deploy\docker\docker-compose.yml"
 $CondaEnvName = "3-chatbot"
-$Url = "http://127.0.0.1:8000/app/"
+$Url = "http://127.0.0.1:8000/docs"
 $PostgresContainerName = "role-chatbot-postgres"
 
 function Fail {
@@ -136,7 +136,7 @@ if (-not (Test-Path -LiteralPath $ComposeFile)) {
 if (Test-PortInUse -Port 8000) {
     Write-Host "端口 8000 已经被占用，可能后端已经在运行。" -ForegroundColor Yellow
     Write-Host "不会重复启动多个后端。"
-    Write-Host "正在打开现有页面：$Url"
+    Write-Host "正在打开 API 文档：$Url"
     Start-Process $Url
     exit 0
 }
@@ -156,7 +156,7 @@ Write-Host "提示：GPT-SoVITS 语音 API 不会自动启动。"
 Write-Host "如需语音，请单独启动 9880 API。不启动语音时可以继续文字聊天。"
 Write-Host ""
 
-Write-Host "正在打开网页：$Url"
+Write-Host "正在打开 API 文档：$Url"
 Start-Process $Url
 
 Write-Host ""

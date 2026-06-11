@@ -44,15 +44,7 @@ def run_database_migrations() -> None:
 
 @app.get("/", include_in_schema=False)
 def index() -> RedirectResponse:
-    return RedirectResponse(url="/app/")
-
-
-if settings.frontend_dir.exists():
-    app.mount(
-        "/app",
-        StaticFiles(directory=settings.frontend_dir, html=True),
-        name="app",
-    )
+    return RedirectResponse(url="/docs")
 
 settings.outputs_dir.mkdir(parents=True, exist_ok=True)
 app.mount(

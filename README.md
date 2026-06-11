@@ -19,7 +19,7 @@ chatbot/
     services/
     database/
   frontend/
-    simple_web/
+    desktop/
   docs/
     ARCHITECTURE.md
     CODEX_GUIDE.md
@@ -96,14 +96,14 @@ python -m pip install -r requirements.txt
 * FastAPI 后端
 * PostgreSQL 数据库
 * Adminer 数据库管理页面
-* `frontend/simple_web` 简单网页前端
+* `frontend/desktop` Electron 桌面端前端
 
-本地网页不需要注册、登录、密码或 JWT。后端启动后会自动确保 `users` 表里有一个默认本地用户；打开网页会直接进入主界面。用户可以在设置里修改显示 ID / 用户名，也可以上传本地头像。数据库主键 `users.id` 不建议手动修改；如果要清空本地用户数据，需要手动清理数据库或后续提供专门工具。
+本地桌面端不需要注册、登录、密码或 JWT。后端启动后会自动确保 `users` 表里有一个默认本地用户；打开 Electron 桌面端会直接进入主界面。用户可以在设置里修改显示 ID / 用户名，也可以上传本地头像。数据库主键 `users.id` 不建议手动修改；如果要清空本地用户数据，需要手动清理数据库或后续提供专门工具。
 
-网页入口：
+后端接口文档：
 
 ```text
-http://127.0.0.1:8000/app/
+http://127.0.0.1:8000/docs
 ```
 
 ---
@@ -138,7 +138,7 @@ pip install -r requirements.txt
 
 ```powershell
 cd E:\my_software\chatbot
-copy .env.example backend\.env
+copy backend\.env.example backend\.env
 ```
 
 然后打开：
@@ -205,13 +205,13 @@ docker compose ps
 ```powershell
 cd E:\my_software\chatbot\backend
 conda activate 3-chatbot
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-启动成功后访问：
+如果端口 8000 被占用：
 
-```text
-http://127.0.0.1:8000/app/
+```powershell
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8010
 ```
 
 接口文档地址：
@@ -226,9 +226,27 @@ http://127.0.0.1:8000/docs
 http://127.0.0.1:8000/health
 ```
 
+### 5. 启动桌面端
+
+进入桌面端目录：
+
+```powershell
+cd E:\my_software\chatbot\frontend\desktop
+npm install
+npm run desktop
+```
+
+浏览器开发模式：
+
+```powershell
+npm run dev
+```
+
+桌面端默认连接 `http://127.0.0.1:8000`。如果后端改用 `8010` 或 `18000`，可在设置页修改后端地址。
+
 ---
 
-### 5. 一键启动方式
+### 6. 一键启动方式
 
 项目根目录提供了辅助启动脚本。
 
@@ -253,14 +271,14 @@ run_app.bat
 4. 启动 PostgreSQL 和 Adminer；
 5. 等待 PostgreSQL healthy；
 6. 检查后端依赖；
-7. 打开 `http://127.0.0.1:8000/app/`；
+7. 打开 `http://127.0.0.1:8000/docs`；
 8. 启动 FastAPI 后端。
 
-如果端口 `8000` 已被占用，脚本会认为后端可能已经在运行，并直接打开网页。
+如果端口 `8000` 已被占用，脚本会认为后端可能已经在运行，并直接打开 API 文档。桌面端需要在 `frontend/desktop` 中手动启动。
 
 ---
 
-### 6. GPT-SoVITS 语音服务
+### 7. GPT-SoVITS 语音服务
 
 GPT-SoVITS 语音 API 不会跟随后端自动启动。
 
@@ -275,7 +293,7 @@ GPTSOVITS_TIMEOUT_SECONDS="120"
 
 ---
 
-### 7. 暂停和停止
+### 8. 暂停和停止
 
 临时暂停后端：
 
@@ -322,7 +340,7 @@ POST /auth/me/avatar
 POST /auth/logout
 ```
 
-项目已删除注册、密码登录、JWT 和 Bearer Token 登录锁。前端打开 `/app/` 后直接使用默认本地用户。
+项目已删除注册、密码登录、JWT 和 Bearer Token 登录锁。Electron 桌面端打开后直接使用默认本地用户。
 
 日记接口：
 
@@ -402,4 +420,6 @@ python -m compileall .
 - [项目计划书](docs/计划书.md)
 - [架构说明](docs/ARCHITECTURE.md)
 - [Codex 协作指南](docs/CODEX_GUIDE.md)
+- [桌面端前端设计](docs/桌面端前端设计.md)
 - [模块说明](backend/modules/README.md)
+- [第三方开源声明](THIRD_PARTY_NOTICES.md)

@@ -36,7 +36,9 @@ text = Path("docs/CODEX_GUIDE.md").read_text(encoding="utf-8")
 - 计划书唯一位置：`docs/计划书.md`。
 - Python 后端依赖文件唯一位置：`backend/requirements.txt`。
 - 关系记忆模块位置：`backend/modules/relationship_memory/`。
+- 唯一前端位置：`frontend/desktop/`。
 - 不要恢复根目录 `requirements.txt`，不要把 `backend/requirements.txt` 复制到根目录。
+- 不要恢复 `frontend/simple_web`，不要恢复旧 HTML + app.js 前端，不要恢复 `/app/` 静态主界面。
 
 从项目根目录安装后端依赖时使用：
 
@@ -59,6 +61,14 @@ Docker Compose 命令必须使用：
 ```powershell
 docker compose --project-directory . -f deploy/docker/docker-compose.yml ...
 ```
+
+## 桌面端前端
+
+项目现在只有 Electron 桌面端前端，位于 `frontend/desktop/`。技术栈是 Electron + React + TypeScript + Vite + Tailwind CSS + Radix UI + TipTap + react-markdown + Zustand + TanStack Query + lucide-react。
+
+后端仍是 FastAPI，默认地址 `http://127.0.0.1:8000`。桌面端设置页可以把后端地址改为 `http://127.0.0.1:8010` 或 `http://127.0.0.1:18000`。前端不使用 token、Bearer 或登录态。
+
+后端不再挂载 `/app/`。用户查看接口文档使用 `http://127.0.0.1:8000/docs`，主界面通过 Electron 桌面端启动。
 
 ## 默认不要自动执行
 

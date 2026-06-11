@@ -17,7 +17,7 @@ chatbot/
     main.py
     modules/
   frontend/
-    simple_web/
+    desktop/
   docs/
     ARCHITECTURE.md
     CODEX_GUIDE.md
@@ -29,7 +29,7 @@ chatbot/
       docker-compose.yml
 ```
 
-`docs/计划书.md` 是计划书唯一位置。`backend/.env.example` 是 env 示例唯一位置。`deploy/docker/docker-compose.yml` 是 Docker Compose 唯一位置。`scripts/runtime/` 是启动/暂停脚本位置。
+`docs/计划书.md` 是计划书唯一位置。`backend/.env.example` 是 env 示例唯一位置。`deploy/docker/docker-compose.yml` 是 Docker Compose 唯一位置。`scripts/runtime/` 是启动/暂停脚本位置。`frontend/desktop/` 是唯一前端位置，旧 `frontend/simple_web` 已删除。
 
 `backend/requirements.txt` 是 Python 后端依赖文件唯一位置。根目录不保留 `requirements.txt`。
 
@@ -66,6 +66,18 @@ frontend
 ```
 
 项目是 Windows 本地单用户模式，不需要注册、登录、密码、JWT 或 Bearer Token。后端启动和首次读取 `/auth/me` 时会自动创建默认本地用户。`get_current_user` 保留为依赖函数名，但只返回默认用户。用户可通过 `PUT /auth/me` 修改显示 ID / 用户名，通过 `POST /auth/me/avatar` 上传头像。数据库主键 `users.id` 不应修改；清空用户数据需要手动清理数据库或后续工具。
+
+前端：
+
+```text
+frontend/desktop
+  -> Electron
+  -> React + TypeScript + Vite
+  -> Tailwind CSS / Radix UI
+  -> FastAPI HTTP APIs
+```
+
+后端不再挂载 `/app/` 静态主界面。根路径 `/` 重定向到 `/docs`，主界面由 Electron 桌面端提供。`/uploads/...` 和 `/outputs/...` 仍由 FastAPI 静态挂载。
 
 普通聊天：
 

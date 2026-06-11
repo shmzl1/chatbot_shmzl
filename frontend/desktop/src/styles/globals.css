@@ -1,0 +1,49 @@
+@import "./theme.css";
+@import "./paper.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 1120px;
+  min-height: 720px;
+  background: var(--app-bg);
+  color: var(--ink);
+  font-family: Inter, "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+
+button,
+input,
+textarea,
+select {
+  -webkit-app-region: no-drag;
+}
+
+::selection {
+  background: rgba(126, 141, 104, 0.25);
+}
