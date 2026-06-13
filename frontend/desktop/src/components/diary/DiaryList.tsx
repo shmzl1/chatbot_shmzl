@@ -15,24 +15,22 @@ export function DiaryList({ entries, activeEntryId, onSelect }: DiaryListProps) 
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="diary-note-list">
       {entries.map((entry) => (
         <button
-          className={`note-card grid gap-2 rounded-2xl p-4 text-left transition ${
-            activeEntryId === entry.id ? "ring-2 ring-[var(--green)]" : "hover:-translate-y-0.5"
-          }`}
+          className={`diary-note-card ${activeEntryId === entry.id ? "active" : ""}`}
           key={entry.id}
           type="button"
           onClick={() => onSelect(entry.id)}
         >
-          <div className="flex items-center justify-between gap-3">
-            <strong className="truncate text-sm">{entry.title || "未命名日记"}</strong>
-            <span className="text-xs font-black text-[var(--muted)]">{entry.entry_date}</span>
+          <div className="diary-note-card-head">
+            <strong>{entry.title || "未命名日记"}</strong>
+            <span>{entry.entry_date}</span>
           </div>
-          <p className="line-clamp-2 text-xs leading-5 text-[var(--muted)]">{entry.content_excerpt || "没有正文"}</p>
-          <div className="flex flex-wrap gap-1.5">
+          <p>{entry.content_excerpt || "没有正文"}</p>
+          <div className="diary-note-card-tags">
             {entry.mood ? <Tag>{entry.mood}</Tag> : null}
-            {entry.tags.slice(0, 2).map((tag) => (
+            {(Array.isArray(entry.tags) ? entry.tags : []).slice(0, 2).map((tag) => (
               <Tag key={tag}>{tag}</Tag>
             ))}
             {entry.image_count ? <Tag>{entry.image_count} 图</Tag> : null}

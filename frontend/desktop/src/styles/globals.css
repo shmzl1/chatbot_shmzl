@@ -9,13 +9,20 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
 body {
   margin: 0;
-  min-width: 1120px;
-  min-height: 720px;
+  overflow: hidden;
   background: var(--app-bg);
   color: var(--ink);
   font-family: Inter, "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -30,7 +37,117 @@ button {
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100%;
+}
+
+.app-frame {
+  display: grid;
+  grid-template-rows: 36px minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 16% 12%, rgba(98, 119, 90, 0.14), transparent 27%),
+    radial-gradient(circle at 88% 18%, rgba(97, 123, 149, 0.13), transparent 25%),
+    linear-gradient(135deg, var(--app-bg), var(--app-bg-2));
+}
+
+.app-body {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.content-shell {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: clamp(18px, 2vw, 32px);
+}
+
+.window-frame {
+  position: relative;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) 124px;
+  align-items: center;
+  height: 36px;
+  border-bottom: 1px solid rgba(83, 76, 64, 0.08);
+  background: rgba(243, 239, 230, 0.86);
+  color: var(--muted);
+  backdrop-filter: blur(18px);
+}
+
+.window-dots {
+  display: flex;
+  gap: 7px;
+  padding-left: 18px;
+}
+
+.window-dots span {
+  width: 11px;
+  height: 11px;
+  border: 1px solid rgba(43, 41, 36, 0.08);
+  border-radius: 999px;
+}
+
+.window-dots span:nth-child(1) {
+  background: #d9897d;
+}
+
+.window-dots span:nth-child(2) {
+  background: #d8b661;
+}
+
+.window-dots span:nth-child(3) {
+  background: #7fa37e;
+}
+
+.window-title {
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.window-controls {
+  display: flex;
+  justify-content: end;
+  height: 100%;
+}
+
+.window-controls button {
+  display: grid;
+  width: 40px;
+  height: 100%;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.window-controls button:hover {
+  background: rgba(43, 41, 36, 0.08);
+  color: var(--ink);
+}
+
+.window-controls button:last-child:hover {
+  background: rgba(168, 90, 82, 0.18);
+  color: var(--danger);
 }
 
 .drag {
@@ -46,4 +163,96 @@ select {
 
 ::selection {
   background: rgba(126, 141, 104, 0.25);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page-kicker {
+  display: grid;
+  gap: 4px;
+}
+
+.page-kicker span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page-kicker strong {
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.error-card,
+.inline-error {
+  border: 1px solid rgba(168, 90, 82, 0.26);
+  background: rgba(168, 90, 82, 0.08);
+  color: var(--danger);
+}
+
+.error-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 16px;
+  width: min(760px, 100%);
+  margin: 36px auto;
+  padding: 22px;
+  border-radius: 14px;
+}
+
+.error-card h2 {
+  margin: 4px 0 8px;
+  color: var(--ink);
+  font-size: 22px;
+}
+
+.error-card p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.error-card-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(168, 90, 82, 0.12);
+}
+
+.inline-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.paper-empty {
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 1279px) {
+  .app-body {
+    grid-template-columns: 92px minmax(0, 1fr);
+  }
 }

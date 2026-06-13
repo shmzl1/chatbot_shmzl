@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,12 +8,23 @@ function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1360,
     height: 880,
-    minWidth: 1120,
+    minWidth: 1100,
     minHeight: 720,
     title: "虚拟人物陪伴系统",
     backgroundColor: "#f5f1e8",
+    show: false,
+    resizable: true,
+    maximizable: true,
+    minimizable: true,
+    fullscreenable: true,
+    thickFrame: true,
+    autoHideMenuBar: true,
     titleBarStyle: "hidden",
-    trafficLightPosition: { x: 14, y: 14 },
+    titleBarOverlay: {
+      color: "#f3efe6",
+      symbolColor: "#2b2924",
+      height: 36,
+    },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -28,11 +39,36 @@ function createWindow(): void {
     void mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: "deny" };
   });
 }
+
+ipcMain.on("window:control", (event, action: "minimize" | "maximize" | "close") => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) {
+    return;
+  }
+  if (action === "minimize") {
+    window.minimize();
+  }
+  if (action === "maximize") {
+    if (window.isMaximized()) {
+      window.unmaximize();
+    } else {
+      window.maximize();
+    }
+  }
+  if (action === "close") {
+    window.close();
+  }
+});
 
 app.whenReady().then(() => {
   createWindow();

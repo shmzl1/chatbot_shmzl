@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
-import { BookOpen, Save, Trash2 } from "lucide-react";
+import { AlertCircle, BookOpen, CalendarDays, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   createDiaryEntry,
@@ -120,6 +120,19 @@ export function DiaryPage() {
     },
   });
 
+  const listError = listQuery.error instanceof Error ? listQuery.error.message : "";
+  const detailError = detailQuery.error instanceof Error ? detailQuery.error.message : "";
+  const mutationError =
+    saveMutation.error instanceof Error
+      ? saveMutation.error.message
+      : deleteMutation.error instanceof Error
+        ? deleteMutation.error.message
+        : uploadMutation.error instanceof Error
+          ? uploadMutation.error.message
+          : deleteImageMutation.error instanceof Error
+            ? deleteImageMutation.error.message
+            : "";
+
   function newEntry() {
     setActiveEntryId(null);
     setDraft({ title: "", content_markdown: "", entry_date: today(), mood: "", tags: [] });
@@ -137,15 +150,19 @@ export function DiaryPage() {
   }
 
   return (
-    <div className="grid h-full grid-cols-[300px_minmax(420px,1fr)_300px] gap-5">
-      <aside className="soft-panel min-h-0 overflow-auto rounded-[28px] p-4">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-black">日记列表</h2>
-          <Button className="px-3" variant="primary" onClick={newEntry}>
+    <div className="diary-workspace">
+      <aside className="diary-sidebar">
+        <div className="page-kicker">
+          <span>Notebook</span>
+          <strong>日记列表</strong>
+        </div>
+        <div className="diary-sidebar-actions">
+          <Button className="px-3" variant="primary" type="button" onClick={newEntry}>
+            <Plus size={16} />
             新建
           </Button>
         </div>
-        <div className="mb-4 grid gap-2">
+        <div className="diary-filter-card">
           <TextField placeholder="搜索" onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))} />
           <div className="grid grid-cols-2 gap-2">
             <TextField type="date" onChange={(event) => setFilters((current) => ({ ...current, date_from: event.target.value }))} />
@@ -156,53 +173,72 @@ export function DiaryPage() {
             <TextField placeholder="标签" onChange={(event) => setFilters((current) => ({ ...current, tag: event.target.value }))} />
           </div>
         </div>
-        <DiaryList
-          activeEntryId={activeEntryId}
-          entries={listQuery.data?.entries || []}
-          onSelect={(entryId) => setActiveEntryId(entryId)}
-        />
+        {listError ? (
+          <div className="inline-error">
+            <AlertCircle size={16} />
+            <span>{listError}</span>
+          </div>
+        ) : listQuery.isLoading ? (
+          <div className="paper-empty">正在读取日记...</div>
+        ) : (
+          <DiaryList
+            activeEntryId={activeEntryId}
+            entries={listQuery.data?.entries || []}
+            onSelect={(entryId) => setActiveEntryId(entryId)}
+          />
+        )}
       </aside>
 
-      <PaperPanel className="grid min-h-0 grid-rows-[auto_1fr] gap-4 overflow-hidden">
-        <div className="flex items-center justify-between gap-3">
+      <PaperPanel className="diary-paper">
+        <div className="diary-paper-head">
           <input
-            className="min-w-0 flex-1 bg-transparent text-3xl font-black outline-none placeholder:text-[rgba(43,41,36,0.32)]"
+            className="diary-title-input"
             placeholder="标题"
             value={draft.title}
             onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
           />
-          <Button disabled={saveMutation.isPending} variant="primary" onClick={() => saveMutation.mutate()}>
+          <Button disabled={saveMutation.isPending} variant="primary" type="button" onClick={() => saveMutation.mutate()}>
             <Save size={16} />
             保存
           </Button>
         </div>
-        <div className="grid min-h-0 grid-cols-2 gap-4">
+        {detailError || mutationError ? (
+          <div className="inline-error">
+            <AlertCircle size={16} />
+            <span>{detailError || mutationError}</span>
+          </div>
+        ) : null}
+        <div className="diary-editor-grid">
           <textarea
-            className="min-h-0 resize-none rounded-2xl border border-[var(--line)] bg-[rgba(255,255,255,0.54)] p-4 text-sm leading-7 outline-none focus:border-[var(--green)]"
+            className="diary-textarea"
             placeholder="写今天发生的事..."
             value={draft.content_markdown}
             onChange={(event) => setDraft((current) => ({ ...current, content_markdown: event.target.value }))}
           />
-          <div className="min-h-0 overflow-auto rounded-2xl border border-[var(--line)] bg-[rgba(255,255,255,0.42)] p-4">
-            <ReactMarkdown className="prose prose-sm max-w-none text-[var(--ink)]">
+          <div className="markdown-preview markdown-selectable">
+            <ReactMarkdown>
               {draft.content_markdown || "预览会出现在这里。"}
             </ReactMarkdown>
           </div>
         </div>
       </PaperPanel>
 
-      <aside className="soft-panel min-h-0 overflow-auto rounded-[28px] p-4">
-        <div className="mb-4 flex items-center gap-2">
+      <aside className="diary-materials">
+        <div className="diary-materials-title">
           <BookOpen className="text-[var(--green)]" size={20} />
-          <h2 className="text-lg font-black">日记属性</h2>
+          <h2>素材栏</h2>
         </div>
-        <div className="grid gap-4">
+        <div className="diary-meta-stack">
           <TextField
             label="日期"
             type="date"
             value={draft.entry_date}
             onChange={(event) => setDraft((current) => ({ ...current, entry_date: event.target.value }))}
           />
+          <div className="date-hint">
+            <CalendarDays size={15} />
+            <span>保存后可以上传图片，也可以让角色读这篇日记。</span>
+          </div>
           <TextField
             label="心情"
             placeholder="例如：烦、累、还行"
@@ -210,10 +246,15 @@ export function DiaryPage() {
             onChange={(event) => setDraft((current) => ({ ...current, mood: event.target.value }))}
           />
           <TextField label="标签" placeholder="逗号分隔" value={tagInput} onChange={(event) => setTagInput(event.target.value)} />
-          <Button variant="secondary" onClick={readWithCharacter}>
+          <div className="tag-preview-row">
+            {parseTags(tagInput).map((tag) => (
+              <span key={tag}>{tag}</span>
+            ))}
+          </div>
+          <Button variant="secondary" type="button" onClick={readWithCharacter}>
             让角色读这篇日记
           </Button>
-          <Button disabled={!activeEntryId} variant="danger" onClick={() => deleteMutation.mutate()}>
+          <Button disabled={!activeEntryId} variant="danger" type="button" onClick={() => deleteMutation.mutate()}>
             <Trash2 size={16} />
             删除日记
           </Button>

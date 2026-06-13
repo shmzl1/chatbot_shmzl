@@ -2,6 +2,7 @@ import { ChatPage } from "../pages/ChatPage";
 import { DiaryPage } from "../pages/DiaryPage";
 import { SchedulePage } from "../pages/SchedulePage";
 import { SettingsPage } from "../pages/SettingsPage";
+import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { useAppStore } from "../stores/appStore";
 import { RightPanel } from "./RightPanel";
 import { Sidebar } from "./Sidebar";
@@ -10,19 +11,27 @@ import { WindowFrame } from "./WindowFrame";
 
 export function AppShell() {
   const activeView = useAppStore((state) => state.activeView);
+  const pageTitle = {
+    chat: "聊天",
+    diary: "日记",
+    schedule: "日程",
+    settings: "设置",
+  }[activeView];
 
   return (
-    <div className="h-screen overflow-hidden bg-[var(--app-bg)] pt-9">
+    <div className="app-frame">
       <WindowFrame />
-      <div className="flex h-full">
+      <div className="app-body">
         <Sidebar />
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="app-main">
           <TopBar />
-          <section className="min-h-0 flex-1 overflow-hidden px-8 pb-8">
-            {activeView === "chat" ? <ChatPage /> : null}
-            {activeView === "diary" ? <DiaryPage /> : null}
-            {activeView === "schedule" ? <SchedulePage /> : null}
-            {activeView === "settings" ? <SettingsPage /> : null}
+          <section className="content-shell">
+            <ErrorBoundary key={activeView} scope={pageTitle}>
+              {activeView === "chat" ? <ChatPage /> : null}
+              {activeView === "diary" ? <DiaryPage /> : null}
+              {activeView === "schedule" ? <SchedulePage /> : null}
+              {activeView === "settings" ? <SettingsPage /> : null}
+            </ErrorBoundary>
           </section>
         </main>
         <RightPanel />

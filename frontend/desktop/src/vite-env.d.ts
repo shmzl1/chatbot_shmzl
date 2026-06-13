@@ -3,5 +3,6 @@
 interface Window {
   desktopShell?: {
     platform: string;
+    windowControl?: (action: "minimize" | "maximize" | "close") => void;
   };
 }

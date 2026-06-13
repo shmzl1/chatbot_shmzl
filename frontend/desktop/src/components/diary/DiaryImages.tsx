@@ -12,9 +12,11 @@ interface DiaryImagesProps {
 }
 
 export function DiaryImages({ attachments, disabled, onUpload, onDelete }: DiaryImagesProps) {
+  const safeAttachments = Array.isArray(attachments) ? attachments : [];
+
   return (
-    <section className="grid gap-3">
-      <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-4 text-sm font-bold text-[var(--green)] transition hover:bg-[var(--surface-2)]">
+    <section className="diary-images">
+      <label className={`image-upload-button ${disabled ? "disabled" : ""}`}>
         <ImagePlus size={17} />
         上传图片
         <input
@@ -31,14 +33,14 @@ export function DiaryImages({ attachments, disabled, onUpload, onDelete }: Diary
           }}
         />
       </label>
-      {attachments.length ? (
-        <div className="grid grid-cols-2 gap-3">
-          {attachments.map((image) => (
-            <article className="note-card overflow-hidden rounded-2xl p-2" key={image.id}>
-              <img className="aspect-square w-full rounded-xl object-cover" src={resolveAssetUrl(image.public_url)} alt={image.original_filename || image.filename} />
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="truncate text-xs font-bold text-[var(--muted)]">{image.original_filename || image.filename}</span>
-                <Button className="size-8 px-0" variant="ghost" onClick={() => onDelete(image.id)}>
+      {safeAttachments.length ? (
+        <div className="image-grid">
+          {safeAttachments.map((image) => (
+            <article className="image-tile" key={image.id}>
+              <img src={resolveAssetUrl(image.public_url)} alt={image.original_filename || image.filename} />
+              <div>
+                <span>{image.original_filename || image.filename}</span>
+                <Button className="size-8 px-0" variant="ghost" type="button" onClick={() => onDelete(image.id)}>
                   <Trash2 size={15} />
                 </Button>
               </div>

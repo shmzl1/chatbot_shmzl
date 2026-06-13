@@ -8,13 +8,11 @@ interface MessageBubbleProps {
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
   return (
-    <article className={clsx("flex", isUser ? "justify-end" : "justify-start")}>
+    <article className={clsx("chat-message", isUser ? "user" : "assistant")}>
       <div
         className={clsx(
-          "max-w-[76%] rounded-[22px] px-5 py-4 leading-7 shadow-soft",
-          isUser
-            ? "bg-[var(--blue)] text-white"
-            : "paper-sheet rounded-bl-md text-[var(--ink)]",
+          "chat-bubble",
+          isUser ? "chat-bubble-user" : "chat-bubble-assistant",
         )}
       >
         <p className="whitespace-pre-wrap text-sm">{message.content}</p>

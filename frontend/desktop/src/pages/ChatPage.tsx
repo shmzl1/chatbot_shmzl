@@ -55,18 +55,19 @@ export function ChatPage() {
   });
 
   return (
-    <div className="grid h-full grid-rows-[auto_1fr_auto] gap-4">
-      <section className="soft-panel flex items-center justify-between rounded-[24px] px-5 py-4">
-        <div className="flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-2xl bg-[rgba(98,119,90,0.14)] text-[var(--green)]">
+    <div className="chat-workspace">
+      <section className="chat-hero">
+        <div className="chat-character-card">
+          <div className="chat-character-avatar">
             <MessageCircle size={22} />
           </div>
           <div>
-            <h2 className="text-lg font-black">角色聊天</h2>
-            <p className="text-sm text-[var(--muted)]">{charactersQuery.data?.characters?.[0]?.display_name || "role01"}</p>
+            <p className="eyebrow">Chat</p>
+            <h2>{charactersQuery.data?.characters?.[0]?.display_name || "role01"}</h2>
+            <span>柔和对话流</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="chat-context-actions">
           {selectedDiary ? (
             <Tag>
               <BookOpen size={13} />
@@ -80,9 +81,9 @@ export function ChatPage() {
         </div>
       </section>
 
-      <section className="min-h-0 overflow-auto rounded-[28px] bg-[rgba(255,250,241,0.35)] p-5">
+      <section className="chat-stream paper-sheet">
         {messages.length ? (
-          <div className="grid gap-4">
+          <div className="chat-message-stack">
             {messages.map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
@@ -97,8 +98,8 @@ export function ChatPage() {
       </section>
 
       {selectedDiary ? (
-        <div className="flex items-center justify-between rounded-2xl border border-[var(--line)] bg-[rgba(98,119,90,0.1)] px-4 py-3">
-          <span className="text-sm font-bold text-[var(--green)]">本轮发送会携带日记上下文：{selectedDiary.title || "未命名日记"}</span>
+        <div className="chat-diary-context">
+          <span>本轮发送会携带日记上下文：{selectedDiary.title || "未命名日记"}</span>
           <Button variant="ghost" onClick={() => setSelectedDiary(null)}>
             清空上下文
           </Button>
