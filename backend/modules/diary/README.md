@@ -4,8 +4,8 @@
 
 ## 数据边界
 
-- 日记正文保存在 PostgreSQL 的 `diary_entries`。
-- 图片文件保存到 `uploads/diary/images/`，数据库只保存文件名、路径、URL、MIME 和大小，不保存 base64。
+- 日记正文保存在本地 SQLite 的 `diary_entries`。
+- 图片文件保存到 `backend/data/uploads/diary/images/`，数据库只保存文件名、路径、URL、MIME 和大小，不保存 base64。
 - 删除日记或图片只做软删除。
 
 ## 聊天边界

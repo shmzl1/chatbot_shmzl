@@ -6,5 +6,4 @@ requests
 qdrant-client
 openai
 numpy
-psycopg[binary]
 python-multipart

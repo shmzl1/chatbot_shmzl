@@ -1,87 +1,66 @@
 # 虚拟人物陪伴系统
 
-本项目是本地运行的虚拟人物陪伴系统。主功能入口是聊天、日记、日程和设置；角色与记忆是嵌入能力，不再作为独立主功能。运行入口集中在 `backend/modules/*`，角色读取、校验、头像和角色包管理都走 `backend/modules/characters`。
+本项目是 Windows 本地单用户桌面端虚拟人物陪伴系统。主功能是聊天、日记、日程和设置；角色、人设、记忆、知识库是底层能力。
+
+默认数据库已经迁移为 SQLite。普通用户不再需要 Docker、PostgreSQL 或 Adminer。
 
 ## 当前结构
 
 ```text
 chatbot/
-  AGENTS.md
-  .editorconfig
-  README.md
-  .gitignore
   backend/
     .env.example
-    main.py
-    requirements.txt
-    core/
-    modules/
-    services/
+    data/
+      chatbot.db
+      uploads/
+      backups/
     database/
+      sqlite_migrations/
+      legacy_postgres_migrations/
+    main.py
+    modules/
+    scripts/
+      migrate_postgres_to_sqlite.py
+    services/
   frontend/
     desktop/
   docs/
-    ARCHITECTURE.md
-    CODEX_GUIDE.md
-    计划书.md
   scripts/
     runtime/
-      run_app.bat
-      run_app.ps1
-      暂时暂停Chatbot.bat
-      彻底停止Chatbot.bat
-  deploy/
-    docker/
-      docker-compose.yml
 ```
 
-根目录只保留入口文档和项目级配置，不放运行脚本、Docker Compose 文件或环境变量示例。
+## 数据库
+
+默认配置：
+
+```env
+DATABASE_BACKEND="sqlite"
+APP_DATA_DIR="./data"
+SQLITE_DB_PATH="./data/chatbot.db"
+UPLOAD_DIR="./data/uploads"
+BACKUP_DIR="./data/backups"
+```
+
+后端启动时会自动创建 `backend/data/`、`backend/data/chatbot.db`、`backend/data/uploads/` 和 `backend/data/backups/`，并执行 `backend/database/sqlite_migrations/` 中尚未执行的迁移。
+
+旧 PostgreSQL 迁移文件已移动到 `backend/database/legacy_postgres_migrations/`，只作为旧版本数据迁移参考，不参与默认启动。
 
 ## 环境变量
 
-唯一 env 示例是 `backend/.env.example`。本地真实配置放在 `backend/.env`：
-
-```powershell
-Copy-Item backend/.env.example backend/.env
-```
-
-普通聊天只读取 `CHAT_*`：
-
-```env
-CHAT_LLM_PROVIDER="openai"
-CHAT_OPENAI_API_KEY=""
-CHAT_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
-CHAT_OPENAI_MODEL="doubao-seed-character-251128"
-CHAT_OPENAI_TIMEOUT_SECONDS="120"
-CHAT_OPENAI_TEMPERATURE="0.8"
-```
-
-人设编辑只读取 `PERSONA_EDITOR_*`：
-
-```env
-PERSONA_EDITOR_LLM_PROVIDER="openai"
-PERSONA_EDITOR_OPENAI_API_KEY=""
-PERSONA_EDITOR_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
-PERSONA_EDITOR_OPENAI_MODEL="doubao-seed-2-0-pro-260215"
-PERSONA_EDITOR_OPENAI_TIMEOUT_SECONDS="180"
-PERSONA_EDITOR_OPENAI_TEMPERATURE="0.2"
-```
-
-项目不保留旧 `OPENAI_*`，不允许 `LLM_PROVIDER`、`auto`、`mock` 或 `fallback`。缺配置、模型失败、JSON 非法都会直接报错。
-
-## 后端依赖
-
-Python 后端依赖文件唯一位置是 `backend/requirements.txt`，根目录不保留 `requirements.txt`。
-
-从项目根目录安装：
+复制环境变量示例：
 
 ```powershell
 cd E:\my_software\chatbot
-conda activate 3-chatbot
-python -m pip install -r backend\requirements.txt
+Copy-Item backend\.env.example backend\.env
 ```
 
-或进入后端目录安装：
+普通聊天只读取 `CHAT_*`，人设编辑只读取 `PERSONA_EDITOR_*`。不要提交真实 API Key，不要提交 `backend/.env`。
+
+项目不保留旧 `OPENAI_*`、`LLM_PROVIDER`、`auto`、`mock` 或 `fallback` 路径。缺配置、模型失败、JSON 非法都会直接报错。
+
+## 后端启动
+
+安装依赖：
 
 ```powershell
 cd E:\my_software\chatbot\backend
@@ -89,118 +68,7 @@ conda activate 3-chatbot
 python -m pip install -r requirements.txt
 ```
 
-## 启动方式
-
-本项目当前为本地单用户运行方式，主要包含：
-
-* FastAPI 后端
-* PostgreSQL 数据库
-* Adminer 数据库管理页面
-* `frontend/desktop` Electron 桌面端前端
-
-本地桌面端不需要注册、登录、密码或 JWT。后端启动后会自动确保 `users` 表里有一个默认本地用户；打开 Electron 桌面端会直接进入主界面。用户可以在设置里修改显示 ID / 用户名，也可以上传本地头像。数据库主键 `users.id` 不建议手动修改；如果要清空本地用户数据，需要手动清理数据库或后续提供专门工具。
-
-后端接口文档：
-
-```text
-http://127.0.0.1:8000/docs
-```
-
----
-
-### 1. 首次准备环境
-
-进入项目根目录：
-
-```powershell
-cd E:\my_software\chatbot
-```
-
-创建并激活 Conda 环境：
-
-```powershell
-conda create -n 3-chatbot python=3.10 -y
-conda activate 3-chatbot
-```
-
-安装后端依赖：
-
-```powershell
-cd backend
-pip install -r requirements.txt
-```
-
----
-
-### 2. 配置环境变量
-
-复制环境变量示例文件：
-
-```powershell
-cd E:\my_software\chatbot
-copy backend\.env.example backend\.env
-```
-
-然后打开：
-
-```text
-backend/.env
-```
-
-至少检查并填写以下配置：
-
-```env
-DATABASE_URL="postgresql://chatbot:change_me_local_only@127.0.0.1:5432/role_chatbot"
-
-CHAT_LLM_PROVIDER="openai"
-CHAT_OPENAI_API_KEY="your_api_key_here"
-CHAT_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
-CHAT_OPENAI_MODEL="your_chat_model_here"
-
-PERSONA_EDITOR_LLM_PROVIDER="openai"
-PERSONA_EDITOR_OPENAI_API_KEY="your_api_key_here"
-PERSONA_EDITOR_OPENAI_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
-PERSONA_EDITOR_OPENAI_MODEL="your_persona_editor_model_here"
-```
-
-注意：
-
-* 不要把真实 API Key 提交到 Git。
-* 不要提交 `backend/.env`。
-* 如果不使用人设编辑功能，也建议先把 `PERSONA_EDITOR_*` 配好，避免调用相关接口时报错。
-* 本项目不使用 mock LLM。模型配置错误时会直接报错。
-* 本地单用户模式不需要配置 JWT 登录密钥。
-
----
-
-### 3. 启动数据库
-
-回到项目根目录：
-
-```powershell
-cd E:\my_software\chatbot
-docker compose --project-directory "E:\my_software\chatbot" -f "E:\my_software\chatbot\deploy\docker\docker-compose.yml" up -d postgres adminer
-```
-
-启动后：
-
-* PostgreSQL 地址：`127.0.0.1:5432`
-* 数据库名：`role_chatbot`
-* 用户名：`chatbot`
-* 密码：`change_me_local_only`
-* Adminer 地址：`http://127.0.0.1:8081`
-
-如果想查看容器状态：
-
-```powershell
-docker compose ps
-```
-
----
-
-### 4. 启动后端
-
-进入后端目录：
+启动后端：
 
 ```powershell
 cd E:\my_software\chatbot\backend
@@ -208,27 +76,19 @@ conda activate 3-chatbot
 python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-如果端口 8000 被占用：
-
-```powershell
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8010
-```
-
-接口文档地址：
+接口文档：
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-健康检查地址：
+健康检查：
 
 ```text
 http://127.0.0.1:8000/health
 ```
 
-### 5. 启动桌面端
-
-进入桌面端目录：
+## 桌面端启动
 
 ```powershell
 cd E:\my_software\chatbot\frontend\desktop
@@ -236,101 +96,42 @@ npm install
 npm run desktop
 ```
 
-浏览器开发模式：
+开发模式：
 
 ```powershell
 npm run dev
 ```
 
-桌面端默认连接 `http://127.0.0.1:8000`。如果后端改用 `8010` 或 `18000`，可在设置页修改后端地址。
+桌面端默认连接 `http://127.0.0.1:8000`。前端不直接读取 SQLite 文件，只调用 FastAPI。
 
----
-
-### 6. 一键启动方式
-
-项目根目录提供了辅助启动脚本。
-
-PowerShell 启动：
+## 一键启动脚本
 
 ```powershell
 cd E:\my_software\chatbot
-.\run_app.ps1
+scripts\runtime\run_app.ps1
 ```
 
 或双击：
 
 ```text
-run_app.bat
+scripts/runtime/run_app.bat
 ```
 
-一键启动脚本会尝试：
+脚本只检查 Conda 和后端依赖，然后启动 FastAPI。它不会启动 Docker，也不会启动 PostgreSQL/Adminer。
 
-1. 检查 Docker；
-2. 检查 Conda；
-3. 检查 `3-chatbot` 环境；
-4. 启动 PostgreSQL 和 Adminer；
-5. 等待 PostgreSQL healthy；
-6. 检查后端依赖；
-7. 打开 `http://127.0.0.1:8000/docs`；
-8. 启动 FastAPI 后端。
+## 本地用户
 
-如果端口 `8000` 已被占用，脚本会认为后端可能已经在运行，并直接打开 API 文档。桌面端需要在 `frontend/desktop` 中手动启动。
+项目是本地单用户模式，不需要注册、登录、密码或 JWT。后端启动或首次调用 `/auth/me` 时会确保 `users` 表里存在一个默认本地用户：
 
----
+- 如果 SQLite 中没有用户，自动创建默认用户。
+- 如果已有且只有一个用户，直接复用。
+- 如果有多个用户，抛出明确错误，避免随意选择导致旧数据关联错乱。
 
-### 7. GPT-SoVITS 语音服务
+用户可以通过设置页修改显示 ID / 用户名，也可以上传本地头像。数据库主键 `users.id` 不建议修改。
 
-GPT-SoVITS 语音 API 不会跟随后端自动启动。
+## 主要接口
 
-如果只使用文字聊天，可以不启动语音服务。
-
-如果需要语音功能，需要单独启动 GPT-SoVITS API，并保证 `.env` 中配置：
-
-```env
-GPTSOVITS_BASE_URL="http://127.0.0.1:9880"
-GPTSOVITS_TIMEOUT_SECONDS="120"
-```
-
----
-
-### 8. 暂停和停止
-
-临时暂停后端：
-
-```text
-暂时暂停Chatbot.bat
-```
-
-彻底停止项目相关服务：
-
-```text
-彻底停止Chatbot.bat
-```
-
-如果手动停止 Docker 数据库：
-
-```powershell
-docker compose down
-```
-
-注意：
-
-```powershell
-docker compose down -v
-```
-
-会删除数据库卷，可能导致本地聊天记录、记忆、反馈等数据丢失。一般不要执行。
-
-普通聊天接口路径保持不变：
-
-```text
-POST /chat/text
-POST /chat
-```
-
-传入 `diary_entry_id` 时，聊天只读取用户主动选择的那一篇日记；默认聊天不会读取任何日记。
-
-本地用户接口：
+本地用户：
 
 ```text
 GET  /auth/status
@@ -340,9 +141,14 @@ POST /auth/me/avatar
 POST /auth/logout
 ```
 
-项目已删除注册、密码登录、JWT 和 Bearer Token 登录锁。Electron 桌面端打开后直接使用默认本地用户。
+聊天：
 
-日记接口：
+```text
+POST /chat/text
+POST /chat
+```
+
+日记：
 
 ```text
 GET    /diary/entries
@@ -354,18 +160,7 @@ POST   /diary/entries/{entry_id}/images
 DELETE /diary/images/{image_id}
 ```
 
-日记图片保存在 `uploads/diary/images/`，数据库只保存元数据和 public URL，不保存 base64。删除日记和图片采用软删除。
-
-关系记忆接口：
-
-```text
-POST /relationship-memory
-GET /relationship-memory?character_id=role01
-POST /relationship-memory/{event_id}/deactivate
-GET /relationship-memory/debug?character_id=role01
-```
-
-人设编辑接口路径保持不变：
+人设编辑：
 
 ```text
 POST /characters/{character_id}/persona-review/chat
@@ -374,38 +169,64 @@ POST /characters/{character_id}/persona-review/apply
 POST /characters/{character_id}/persona-review/rollback
 ```
 
-## 人设编辑
+## 人设和记忆
 
-`finalize` 只接受模型输出 patch JSON。后端把 patch 合并到当前 `character.json`，生成 `preview_character_json`，校验通过后返回预览。
+固定核心人设：`id`、`display_name`、`core_personality`、`speaking_style`、`relationship_to_user`、`forbidden`、`reply_patterns`、`lore`、`style_contract`。这部分不可被人设编辑 AI 自动修改、删除、覆盖或压缩，每次聊天 prompt 必须完整读取。`avatar_url` 和 `voice` 是受保护元数据。
 
-`apply` 必须由用户确认后才写入。模型返回非法 JSON 时直接返回 502，不做自动修补。
+可变补充人设：`dialogues`、`reactions`、`bad_examples`、`evaluation_criteria`、`revision_notes`。这些字段可由人设编辑 AI 少量追加，并在用户确认应用后压缩和归档。
 
-人设分为两层：
+字段上限：`dialogues=20`、`reactions=20`、`bad_examples=20`、`evaluation_criteria=30`、`revision_notes=20`。生成 preview 不写归档，只有用户确认应用并真正写入 `character.json` 后才归档到角色包 `backups/persona_compaction_archive.jsonl`。
 
-- 固定核心人设：`id`、`display_name`、`core_personality`、`speaking_style`、`relationship_to_user`、`forbidden`、`reply_patterns`、`lore`、`style_contract`。这些字段不可被人设编辑 AI 自动修改、删除、覆盖或压缩，每次聊天 prompt 必须完整读取。`avatar_url` 和 `voice` 是受保护元数据，也不可被人设编辑 AI 自动修改。
-- 可变补充人设：`dialogues`、`reactions`、`bad_examples`、`evaluation_criteria`、`revision_notes`。这些字段可以由人设编辑 AI 追加，并在用户确认应用后压缩和归档。
+记忆分为 pinned / always_read、普通 active、短期记忆。pinned 或 `read_policy=always` 每次 prompt 必读，不参与 topK；普通 active 记忆按相关性和重要度 topK 进入 prompt；过期、archived、superseded、deleted 或 `read_policy=never` 的记忆不会进入 prompt。
 
-可变补充字段上限：`dialogues` 20 条，`reactions` 20 条，`bad_examples` 20 条，`evaluation_criteria` 30 条，`revision_notes` 20 条。压缩只在用户点击【确认应用修改】并真正写入 `character.json` 时发生；被裁剪内容写入角色包 `backups/persona_compaction_archive.jsonl`，不会在生成 preview 时重复归档。
+## 旧 PostgreSQL 数据迁移
 
-## 关系记忆
+一次性迁移脚本：
 
-`relationship_memory_events` 保存用户和角色之间的有效长期关系上下文。普通聊天仍兼容旧 `long_term_memories`，同时会把有效关系记忆加入聊天 prompt 的长期上下文。
+```text
+backend/scripts/migrate_postgres_to_sqlite.py
+```
 
-前端“确认记忆建议”时会继续写入旧长期记忆，并额外写入一条关系记忆事件，来源标记为 `chat`，记录会话和 turn 信息。停用关系记忆只会把 `is_active` 置为 `false`，不会删除历史事件。
+迁移前请先备份旧 PostgreSQL，例如使用旧环境中的 `pg_dump`：
 
-记忆分为三类：
+```powershell
+pg_dump "postgresql://chatbot:change_me_local_only@127.0.0.1:5432/role_chatbot" -Fc -f E:\my_software\chatbot\backup-role-chatbot.dump
+```
 
-- pinned / always_read 记忆：`is_pinned=true` 或 `read_policy=always`，每次 prompt 必须读取，不参与 topK 裁剪，不允许 AI 自动删除或覆盖。
-- 普通 active 记忆：`status=active` 且 `read_policy=relevant`，只按相关性和重要度 topK 进入 prompt。
-- 短期记忆：可以设置 `expires_at`，过期后不再进入 prompt。
+迁移命令：
 
-`archived`、`superseded`、`deleted`、`read_policy=never` 或已过期的记忆不会进入聊天 prompt。未来前端管理界面应允许用户手动设置哪些记忆是 pinned，哪些可以归档或遗忘。
+```powershell
+cd E:\my_software\chatbot\backend
+conda activate 3-chatbot
+python scripts\migrate_postgres_to_sqlite.py --postgres-url "postgresql://chatbot:change_me_local_only@127.0.0.1:5432/role_chatbot" --sqlite-path "data\chatbot.db"
+```
 
-## 语音规则
+迁移脚本不会删除或修改旧 PostgreSQL 数据。若目标 SQLite 已有数据，默认停止；确认后可加 `--overwrite`，脚本会先备份现有 SQLite 文件。
 
-GPT-SoVITS 的 `prompt_text` 可以为空。`neutral` 是默认语音参考：用户没有明确选择 emotion 时使用 `neutral`。
+迁移脚本需要可选依赖：
 
-用户明确选择 `angry`、`sad`、`happy` 等 emotion 时，必须存在该 emotion 的参考音频；缺少对应 `ref_audio_path` 会直接报错，不自动退回 `neutral`。
+```powershell
+python -m pip install "psycopg[binary]"
+```
+
+这个依赖只用于旧数据迁移，不是普通启动依赖。
+
+## 可选清理旧 Docker/PostgreSQL
+
+只有在确认 SQLite 迁移成功、旧聊天/日记/图片/记忆都能在桌面端看到之后，才可以手动清理旧 PostgreSQL 容器和卷。项目已删除默认 `deploy/docker/docker-compose.yml`，以下命令只适用于你仍保留旧版本 compose 文件的工作副本：
+
+```powershell
+cd E:\my_software\chatbot
+docker compose -f deploy\docker\docker-compose.yml down
+```
+
+删除旧数据卷有不可逆风险：
+
+```powershell
+docker compose -f deploy\docker\docker-compose.yml down -v
+```
+
+`down -v` 会删除 PostgreSQL 数据卷，执行后旧数据库数据不可恢复。
 
 ## 轻量检查
 
@@ -415,11 +236,15 @@ conda activate 3-chatbot
 python -m compileall .
 ```
 
+```powershell
+cd E:\my_software\chatbot\frontend\desktop
+npm run build
+```
+
 ## 更多文档
 
-- [项目计划书](docs/计划书.md)
 - [架构说明](docs/ARCHITECTURE.md)
 - [Codex 协作指南](docs/CODEX_GUIDE.md)
 - [桌面端前端设计](docs/桌面端前端设计.md)
-- [模块说明](backend/modules/README.md)
+- [旧 PostgreSQL 迁移说明](docs/旧PostgreSQL迁移.md)
 - [第三方开源声明](THIRD_PARTY_NOTICES.md)

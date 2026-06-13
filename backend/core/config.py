@@ -11,7 +11,7 @@ load_dotenv(BASE_DIR / ".env")
 
 
 def _data_dir() -> Path:
-    configured = os.getenv("DATA_DIR")
+    configured = os.getenv("APP_DATA_DIR") or os.getenv("DATA_DIR")
     if not configured:
         return BASE_DIR / "data"
 
@@ -34,11 +34,16 @@ def _path_from_env(name: str, default: Path) -> Path:
     return BASE_DIR / path
 
 
-def _database_url() -> str:
-    return os.getenv(
-        "DATABASE_URL",
-        "postgresql://chatbot:change_me_local_only@127.0.0.1:5432/role_chatbot",
-    )
+def _sqlite_db_path() -> Path:
+    configured = os.getenv("SQLITE_DB_PATH")
+    if not configured:
+        return _data_dir() / "chatbot.db"
+    path = Path(configured)
+    if path.is_absolute():
+        return path
+    if path.parts and path.parts[0].lower() == "backend":
+        return PROJECT_ROOT / path
+    return BASE_DIR / path
 
 
 def _gptsovits_base_url() -> str:
@@ -79,9 +84,11 @@ class Settings:
     app_name: str = os.getenv("APP_NAME", "Virtual Character Companion System")
     app_version: str = os.getenv("APP_VERSION", "0.1.0")
     data_dir: Path = _data_dir()
-    database_url: str = _database_url()
+    database_backend: str = os.getenv("DATABASE_BACKEND", "sqlite").strip().lower() or "sqlite"
+    sqlite_db_path: Path = _sqlite_db_path()
     outputs_dir: Path = _path_from_env("OUTPUTS_DIR", BASE_DIR / "outputs")
     upload_dir: Path = _path_from_env("UPLOAD_DIR", BASE_DIR / "data" / "uploads")
+    backup_dir: Path = _path_from_env("BACKUP_DIR", _data_dir() / "backups")
     default_character_id: str = os.getenv("DEFAULT_CHARACTER_ID", "role01")
     chat_llm_provider: str | None = _optional_env("CHAT_LLM_PROVIDER")
     chat_openai_api_key: str | None = _optional_env("CHAT_OPENAI_API_KEY")

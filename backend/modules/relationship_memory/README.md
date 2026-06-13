@@ -4,10 +4,10 @@
 
 ## 数据表
 
-迁移文件：
+SQLite 迁移文件：
 
 ```text
-backend/database/migrations/006_create_relationship_memory_events.sql
+backend/database/sqlite_migrations/001_create_sqlite_schema.sql
 ```
 
 表名：
@@ -16,7 +16,7 @@ backend/database/migrations/006_create_relationship_memory_events.sql
 relationship_memory_events
 ```
 
-核心字段包括 `character_id`、`source_type`、`source_id`、`source_turn_id`、`memory_type`、`content`、`evidence`、`importance`、`is_active`、`is_pinned`、`is_editable`、`read_policy`、`status`、`expires_at`、`last_used_at`、`use_count`、`created_at`、`updated_at`。
+核心字段包括 `character_id`、`source_type`、`source_id`、`source_turn_id`、`memory_type`、`content`、`evidence`、`importance`、`is_active`、`is_pinned`、`is_editable`、`read_policy`、`status`、`expires_at`、`last_used_at`、`use_count`、`created_at`、`updated_at`。JSON 字段在 SQLite 中以 TEXT 保存 JSON 字符串，布尔字段以 INTEGER 0/1 保存。
 
 ## 接口
 

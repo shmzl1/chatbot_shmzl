@@ -68,6 +68,14 @@ conda activate 3-chatbot
 python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+后端默认使用本地 SQLite 文件：
+
+```text
+E:\my_software\chatbot\backend\data\chatbot.db
+```
+
+普通启动不需要 Docker、PostgreSQL 或 Adminer。前端不直接读写数据库文件，只通过 FastAPI 调用接口。
+
 端口 8000 被占用时：
 
 ```powershell

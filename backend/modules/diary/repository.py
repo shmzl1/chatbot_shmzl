@@ -1,11 +1,10 @@
 """Repository for diary entries and image metadata."""
 
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
-from psycopg.types.json import Json
 
 from modules.diary.schemas import DiaryAttachment, DiaryEntryDetail, DiaryEntryListItem
 from services.database_service import database_service
@@ -15,6 +14,18 @@ def _as_text(value: Any) -> str:
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _row(row: Any) -> Dict[str, Any]:
+    return dict(row)
 
 
 class DiaryRepository:
@@ -33,25 +44,25 @@ class DiaryRepository:
         database_service.ensure_ready()
         safe_limit = max(1, min(limit, 100))
         safe_offset = max(0, offset)
-        clauses = ["e.user_id = %s", "e.is_deleted = FALSE"]
+        clauses = ["e.user_id = ?", "e.is_deleted = 0"]
         params: List[Any] = [user_id]
 
         if keyword:
             value = f"%{keyword.strip()}%"
-            clauses.append("(e.title ILIKE %s OR e.content_markdown ILIKE %s)")
+            clauses.append("(LOWER(e.title) LIKE LOWER(?) OR LOWER(e.content_markdown) LIKE LOWER(?))")
             params.extend([value, value])
         if date_from:
-            clauses.append("e.entry_date >= %s")
-            params.append(date_from)
+            clauses.append("e.entry_date >= ?")
+            params.append(_as_text(date_from))
         if date_to:
-            clauses.append("e.entry_date <= %s")
-            params.append(date_to)
+            clauses.append("e.entry_date <= ?")
+            params.append(_as_text(date_to))
         if mood:
-            clauses.append("e.mood = %s")
+            clauses.append("e.mood = ?")
             params.append(mood.strip())
         if tag:
-            clauses.append("e.tags_json ? %s")
-            params.append(tag.strip())
+            clauses.append("e.tags_json LIKE ?")
+            params.append(f'%"{tag.strip()}"%')
 
         params.extend([safe_limit, safe_offset])
         where = " AND ".join(clauses)
@@ -64,12 +75,12 @@ class DiaryRepository:
                         SELECT COUNT(*)
                         FROM diary_attachments a
                         WHERE a.entry_id = e.id
-                          AND a.is_deleted = FALSE
+                          AND a.is_deleted = 0
                     ) AS image_count
                 FROM diary_entries e
                 WHERE {where}
                 ORDER BY e.entry_date DESC, e.updated_at DESC, e.id DESC
-                LIMIT %s OFFSET %s
+                LIMIT ? OFFSET ?
                 """,
                 tuple(params),
             ).fetchall()
@@ -86,8 +97,9 @@ class DiaryRepository:
         tags: List[str],
     ) -> DiaryEntryDetail:
         database_service.ensure_ready()
+        now = _now()
         with database_service._connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 INSERT INTO diary_entries (
                     user_id,
@@ -95,14 +107,16 @@ class DiaryRepository:
                     content_markdown,
                     entry_date,
                     mood,
-                    tags_json
+                    tags_json,
+                    created_at,
+                    updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (user_id, title, content_markdown, entry_date, mood, Json(tags)),
-            ).fetchone()
-        return self.get_entry(user_id=user_id, entry_id=int(row["id"]))
+                (user_id, title, content_markdown, _as_text(entry_date), mood, _json(tags), now, now),
+            )
+            entry_id = int(cursor.lastrowid)
+        return self.get_entry(user_id=user_id, entry_id=entry_id)
 
     def get_entry(self, *, user_id: int, entry_id: int) -> DiaryEntryDetail:
         database_service.ensure_ready()
@@ -111,9 +125,9 @@ class DiaryRepository:
                 """
                 SELECT *
                 FROM diary_entries
-                WHERE id = %s
-                  AND user_id = %s
-                  AND is_deleted = FALSE
+                WHERE id = ?
+                  AND user_id = ?
+                  AND is_deleted = 0
                 LIMIT 1
                 """,
                 (entry_id, user_id),
@@ -124,9 +138,9 @@ class DiaryRepository:
                 """
                 SELECT *
                 FROM diary_attachments
-                WHERE entry_id = %s
-                  AND user_id = %s
-                  AND is_deleted = FALSE
+                WHERE entry_id = ?
+                  AND user_id = ?
+                  AND is_deleted = 0
                 ORDER BY created_at ASC, id ASC
                 """,
                 (entry_id, user_id),
@@ -146,55 +160,56 @@ class DiaryRepository:
     ) -> DiaryEntryDetail:
         database_service.ensure_ready()
         with database_service._connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE diary_entries
-                SET title = %s,
-                    content_markdown = %s,
-                    entry_date = %s,
-                    mood = %s,
-                    tags_json = %s,
-                    updated_at = NOW()
-                WHERE id = %s
-                  AND user_id = %s
-                  AND is_deleted = FALSE
-                RETURNING id
+                SET title = ?,
+                    content_markdown = ?,
+                    entry_date = ?,
+                    mood = ?,
+                    tags_json = ?,
+                    updated_at = ?
+                WHERE id = ?
+                  AND user_id = ?
+                  AND is_deleted = 0
                 """,
-                (title, content_markdown, entry_date, mood, Json(tags), entry_id, user_id),
-            ).fetchone()
-        if not row:
+                (title, content_markdown, _as_text(entry_date), mood, _json(tags), _now(), entry_id, user_id),
+            )
+            updated = cursor.rowcount
+        if updated <= 0:
             raise HTTPException(status_code=404, detail="Diary entry not found")
         return self.get_entry(user_id=user_id, entry_id=entry_id)
 
     def soft_delete_entry(self, *, user_id: int, entry_id: int) -> int:
         database_service.ensure_ready()
+        now = _now()
         with database_service._connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE diary_entries
-                SET is_deleted = TRUE,
-                    deleted_at = NOW(),
-                    updated_at = NOW()
-                WHERE id = %s
-                  AND user_id = %s
-                  AND is_deleted = FALSE
-                RETURNING id
+                SET is_deleted = 1,
+                    deleted_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                  AND user_id = ?
+                  AND is_deleted = 0
                 """,
-                (entry_id, user_id),
-            ).fetchone()
-            if row:
+                (now, now, entry_id, user_id),
+            )
+            deleted = cursor.rowcount
+            if deleted:
                 connection.execute(
                     """
                     UPDATE diary_attachments
-                    SET is_deleted = TRUE,
-                        deleted_at = NOW()
-                    WHERE entry_id = %s
-                      AND user_id = %s
-                      AND is_deleted = FALSE
+                    SET is_deleted = 1,
+                        deleted_at = ?
+                    WHERE entry_id = ?
+                      AND user_id = ?
+                      AND is_deleted = 0
                     """,
-                    (entry_id, user_id),
+                    (now, entry_id, user_id),
                 )
-        return 1 if row else 0
+        return 1 if deleted else 0
 
     def create_attachment(
         self,
@@ -210,7 +225,7 @@ class DiaryRepository:
     ) -> DiaryAttachment:
         self.get_entry(user_id=user_id, entry_id=entry_id)
         with database_service._connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 INSERT INTO diary_attachments (
                     entry_id,
@@ -222,8 +237,7 @@ class DiaryRepository:
                     storage_path,
                     public_url
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     entry_id,
@@ -235,27 +249,33 @@ class DiaryRepository:
                     storage_path,
                     public_url,
                 ),
+            )
+            attachment_id = int(cursor.lastrowid)
+            row = connection.execute(
+                "SELECT * FROM diary_attachments WHERE id = ?",
+                (attachment_id,),
             ).fetchone()
         return self._row_to_attachment(row)
 
     def soft_delete_attachment(self, *, user_id: int, image_id: int) -> int:
         database_service.ensure_ready()
         with database_service._connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE diary_attachments
-                SET is_deleted = TRUE,
-                    deleted_at = NOW()
-                WHERE id = %s
-                  AND user_id = %s
-                  AND is_deleted = FALSE
-                RETURNING id
+                SET is_deleted = 1,
+                    deleted_at = ?
+                WHERE id = ?
+                  AND user_id = ?
+                  AND is_deleted = 0
                 """,
-                (image_id, user_id),
-            ).fetchone()
-        return 1 if row else 0
+                (_now(), image_id, user_id),
+            )
+            deleted = cursor.rowcount
+        return 1 if deleted else 0
 
-    def _row_to_list_item(self, row: Dict[str, Any]) -> DiaryEntryListItem:
+    def _row_to_list_item(self, raw_row: Any) -> DiaryEntryListItem:
+        row = _row(raw_row)
         content = str(row["content_markdown"] or "")
         return DiaryEntryListItem(
             id=int(row["id"]),
@@ -271,9 +291,10 @@ class DiaryRepository:
 
     def _row_to_detail(
         self,
-        row: Dict[str, Any],
-        attachments: List[Dict[str, Any]],
+        raw_row: Any,
+        attachments: List[Any],
     ) -> DiaryEntryDetail:
+        row = _row(raw_row)
         return DiaryEntryDetail(
             id=int(row["id"]),
             title=str(row["title"] or ""),
@@ -286,7 +307,8 @@ class DiaryRepository:
             updated_at=_as_text(row["updated_at"]),
         )
 
-    def _row_to_attachment(self, row: Dict[str, Any]) -> DiaryAttachment:
+    def _row_to_attachment(self, raw_row: Any) -> DiaryAttachment:
+        row = _row(raw_row)
         return DiaryAttachment(
             id=int(row["id"]),
             entry_id=int(row["entry_id"]),

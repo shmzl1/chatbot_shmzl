@@ -7,7 +7,8 @@ class HealthResponse(BaseModel):
     status: str
     gptsovits: bool
     qdrant: bool
-    postgres: bool = False
+    database: bool = False
+    database_backend: str = "sqlite"
 
 
 class CharacterSummary(BaseModel):

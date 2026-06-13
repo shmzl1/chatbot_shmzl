@@ -9,10 +9,11 @@ router = APIRouter(tags=["health"])
 
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    postgres_ready = database_service.is_ready()
+    database_ready = database_service.is_ready()
     return HealthResponse(
-        status="ok" if postgres_ready else "degraded",
+        status="ok" if database_ready else "degraded",
         gptsovits=False,
         qdrant=False,
-        postgres=postgres_ready,
+        database=database_ready,
+        database_backend="sqlite",
     )

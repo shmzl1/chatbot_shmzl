@@ -1,21 +1,18 @@
 import json
 import re
+import sqlite3
 import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlsplit, urlunsplit
 
-import psycopg
 from fastapi import HTTPException
-from psycopg.rows import dict_row
-from psycopg.types.json import Json
 
 from core.config import settings
-from core.schemas import CandidateReply, ChatSessionSummary, ChatTurnRecord, MemoryRecord, UserRecord
-from core.schemas import KnowledgeRecord
-from services.migration_service import migration_service
+from core.schemas import CandidateReply, ChatSessionSummary, ChatTurnRecord, KnowledgeRecord
+from core.schemas import MemoryRecord, UserRecord
+from services.sqlite_migration_service import sqlite_migration_service
 
 
 def _now() -> str:
@@ -28,9 +25,19 @@ def _model_to_dict(model: Any) -> Dict[str, Any]:
     return model.dict()
 
 
+def _json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _row(row: sqlite3.Row | Dict[str, Any]) -> Dict[str, Any]:
+    if isinstance(row, dict):
+        return row
+    return dict(row)
+
+
 class DatabaseService:
-    def __init__(self, database_url: str) -> None:
-        self.database_url = database_url
+    def __init__(self, sqlite_path: Path) -> None:
+        self.sqlite_path = sqlite_path
         self._initialized = False
 
     def save_chat_turn(
@@ -53,14 +60,14 @@ class DatabaseService:
             connection.execute(
                 """
                 INSERT INTO chat_sessions (id, character_id, created_at, updated_at)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (id) DO UPDATE SET
-                    character_id = EXCLUDED.character_id,
-                    updated_at = EXCLUDED.updated_at
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    character_id = excluded.character_id,
+                    updated_at = excluded.updated_at
                 """,
                 (resolved_session_id, character_id, now, now),
             )
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 INSERT INTO chat_turns (
                     session_id,
@@ -72,8 +79,7 @@ class DatabaseService:
                     debug_json,
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     resolved_session_id,
@@ -81,13 +87,14 @@ class DatabaseService:
                     user_message,
                     reply,
                     emotion,
-                    Json(candidates_json),
-                    Json(debug),
+                    _json(candidates_json),
+                    _json(debug),
                     now,
                 ),
-            ).fetchone()
+            )
+            turn_id = int(cursor.lastrowid)
 
-        return resolved_session_id, int(row["id"])
+        return resolved_session_id, turn_id
 
     def list_sessions(self, limit: int = 50) -> List[ChatSessionSummary]:
         self._ensure_database()
@@ -119,7 +126,7 @@ class DatabaseService:
                 LEFT JOIN chat_turns t ON t.session_id = s.id
                 GROUP BY s.id
                 ORDER BY s.updated_at DESC
-                LIMIT %s
+                LIMIT ?
                 """,
                 (safe_limit,),
             ).fetchall()
@@ -142,29 +149,18 @@ class DatabaseService:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT
-                    id,
-                    session_id,
-                    character_id,
-                    user_message,
-                    reply,
-                    emotion,
-                    candidates_json,
-                    debug_json,
-                    created_at
+                SELECT *
                 FROM chat_turns
-                WHERE session_id = %s
+                WHERE session_id = ?
                 ORDER BY id ASC
                 """,
                 (session_id,),
             ).fetchall()
-
         return [self._row_to_turn(row) for row in rows]
 
     def recent_history(self, session_id: Optional[str], limit: int = 10) -> List[Dict[str, str]]:
         if not session_id:
             return []
-
         self._ensure_database()
         safe_limit = max(1, min(limit, 30))
         with self._connect() as connection:
@@ -172,40 +168,25 @@ class DatabaseService:
                 """
                 SELECT user_message, reply, emotion
                 FROM chat_turns
-                WHERE session_id = %s
+                WHERE session_id = ?
                 ORDER BY id DESC
-                LIMIT %s
+                LIMIT ?
                 """,
                 (session_id, safe_limit),
             ).fetchall()
-
-        history = []
-        for row in reversed(rows):
-            history.append(
-                {
-                    "user": row["user_message"],
-                    "assistant": row["reply"],
-                    "emotion": row["emotion"],
-                }
-            )
-        return history
+        return [
+            {"user": row["user_message"], "assistant": row["reply"], "emotion": row["emotion"]}
+            for row in reversed(rows)
+        ]
 
     def info(self) -> Dict[str, Any]:
         self._ensure_database()
         with self._connect() as connection:
-            session_row = connection.execute(
-                "SELECT COUNT(*) AS count FROM chat_sessions"
-            ).fetchone()
+            session_row = connection.execute("SELECT COUNT(*) AS count FROM chat_sessions").fetchone()
             turn_row = connection.execute("SELECT COUNT(*) AS count FROM chat_turns").fetchone()
-            memory_row = connection.execute(
-                "SELECT COUNT(*) AS count FROM long_term_memories"
-            ).fetchone()
-            knowledge_row = connection.execute(
-                "SELECT COUNT(*) AS count FROM knowledge_items"
-            ).fetchone()
-            feedback_row = connection.execute(
-                "SELECT COUNT(*) AS count FROM turn_feedback"
-            ).fetchone()
+            memory_row = connection.execute("SELECT COUNT(*) AS count FROM long_term_memories").fetchone()
+            knowledge_row = connection.execute("SELECT COUNT(*) AS count FROM knowledge_items").fetchone()
+            feedback_row = connection.execute("SELECT COUNT(*) AS count FROM turn_feedback").fetchone()
             persona_feedback_row = connection.execute(
                 "SELECT COUNT(*) AS count FROM persona_turn_feedback"
             ).fetchone()
@@ -214,8 +195,8 @@ class DatabaseService:
             ).fetchone()
 
         return {
-            "database_backend": "postgresql",
-            "database_url": self._masked_database_url(),
+            "database_backend": "sqlite",
+            "database_url": str(self.sqlite_path),
             "session_count": int(session_row["count"]) if session_row else 0,
             "turn_count": int(turn_row["count"]) if turn_row else 0,
             "memory_count": int(memory_row["count"]) if memory_row else 0,
@@ -235,7 +216,7 @@ class DatabaseService:
             with self._connect() as connection:
                 connection.execute("SELECT 1").fetchone()
             return True
-        except psycopg.OperationalError:
+        except sqlite3.Error:
             return False
 
     def ensure_ready(self) -> None:
@@ -254,31 +235,31 @@ class DatabaseService:
         normalized_username = username.strip()
         normalized_email = email.strip().lower() if email else None
         now = _now()
-
         if self.user_count() > 0:
             raise HTTPException(status_code=409, detail="本地账号已初始化")
-        if self.get_user_by_username(normalized_username):
-            raise HTTPException(status_code=409, detail="用户名已存在")
-        if normalized_email and self.get_user_by_email(normalized_email):
-            raise HTTPException(status_code=409, detail="邮箱已存在")
-
-        with self._connect() as connection:
-            row = connection.execute(
-                """
-                INSERT INTO users (
-                    username,
-                    email,
-                    password_hash,
-                    avatar_url,
-                    created_at,
-                    updated_at
+        try:
+            with self._connect() as connection:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO users (
+                        username,
+                        email,
+                        password_hash,
+                        avatar_url,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (?, ?, ?, NULL, ?, ?)
+                    """,
+                    (normalized_username, normalized_email, password_hash, now, now),
                 )
-                VALUES (%s, %s, %s, NULL, %s, %s)
-                RETURNING *
-                """,
-                (normalized_username, normalized_email, password_hash, now, now),
-            ).fetchone()
-        return self._row_to_user(row)
+                user_id = int(cursor.lastrowid)
+        except sqlite3.IntegrityError as exc:
+            raise HTTPException(status_code=409, detail="本地用户已存在") from exc
+        user = self.get_user_by_id(user_id)
+        if user is None:
+            raise HTTPException(status_code=500, detail="默认本地用户创建失败")
+        return user
 
     def user_count(self) -> int:
         self._ensure_database()
@@ -290,7 +271,7 @@ class DatabaseService:
         self._ensure_database()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM users WHERE LOWER(username) = LOWER(%s) LIMIT 1",
+                "SELECT * FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1",
                 (username.strip(),),
             ).fetchone()
         return self._row_to_user(row) if row else None
@@ -299,7 +280,7 @@ class DatabaseService:
         self._ensure_database()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM users WHERE email IS NOT NULL AND LOWER(email) = LOWER(%s) LIMIT 1",
+                "SELECT * FROM users WHERE email IS NOT NULL AND LOWER(email) = LOWER(?) LIMIT 1",
                 (email.strip(),),
             ).fetchone()
         return self._row_to_user(row) if row else None
@@ -307,18 +288,13 @@ class DatabaseService:
     def get_user_by_id(self, user_id: int) -> Optional[UserRecord]:
         self._ensure_database()
         with self._connect() as connection:
-            row = connection.execute(
-                "SELECT * FROM users WHERE id = %s LIMIT 1",
-                (user_id,),
-            ).fetchone()
+            row = connection.execute("SELECT * FROM users WHERE id = ? LIMIT 1", (user_id,)).fetchone()
         return self._row_to_user(row) if row else None
 
     def get_single_user(self) -> Optional[UserRecord]:
         self._ensure_database()
         with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT * FROM users ORDER BY id ASC LIMIT 2"
-            ).fetchall()
+            rows = connection.execute("SELECT * FROM users ORDER BY id ASC LIMIT 2").fetchall()
         if len(rows) > 1:
             raise HTTPException(
                 status_code=500,
@@ -336,47 +312,46 @@ class DatabaseService:
             raise HTTPException(status_code=400, detail="用户名不能为空")
         if len(normalized_username) > 50:
             raise HTTPException(status_code=400, detail="用户名长度不能超过 50")
-
         try:
             with self._connect() as connection:
-                row = connection.execute(
+                connection.execute(
                     """
                     UPDATE users
-                    SET username = %s,
-                        updated_at = %s
-                    WHERE id = %s
-                    RETURNING *
+                    SET username = ?,
+                        updated_at = ?
+                    WHERE id = ?
                     """,
                     (normalized_username, _now(), user_id),
-                ).fetchone()
-        except psycopg.errors.UniqueViolation as exc:
+                )
+        except sqlite3.IntegrityError as exc:
             raise HTTPException(status_code=409, detail="用户名已存在") from exc
-
-        if not row:
+        user = self.get_user_by_id(user_id)
+        if user is None:
             raise HTTPException(status_code=404, detail="用户不存在")
-        return self._row_to_user(row)
+        return user
 
     def update_user_avatar(self, user_id: int, avatar_url: str) -> UserRecord:
         self._ensure_database()
         with self._connect() as connection:
-            row = connection.execute(
+            connection.execute(
                 """
                 UPDATE users
-                SET avatar_url = %s,
-                    updated_at = %s
-                WHERE id = %s
-                RETURNING *
+                SET avatar_url = ?,
+                    updated_at = ?
+                WHERE id = ?
                 """,
                 (avatar_url, _now(), user_id),
-            ).fetchone()
-        if not row:
+            )
+        user = self.get_user_by_id(user_id)
+        if user is None:
             raise HTTPException(status_code=404, detail="用户不存在")
-        return self._row_to_user(row)
+        return user
 
     def upsert_character_avatar(self, character_id: str, avatar_url: str) -> str:
         self._ensure_database()
+        now = _now()
         with self._connect() as connection:
-            row = connection.execute(
+            connection.execute(
                 """
                 INSERT INTO character_avatar_map (
                     character_id,
@@ -384,15 +359,14 @@ class DatabaseService:
                     created_at,
                     updated_at
                 )
-                VALUES (%s, %s, NOW(), NOW())
-                ON CONFLICT (character_id) DO UPDATE SET
-                    avatar_url = EXCLUDED.avatar_url,
-                    updated_at = NOW()
-                RETURNING avatar_url
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(character_id) DO UPDATE SET
+                    avatar_url = excluded.avatar_url,
+                    updated_at = excluded.updated_at
                 """,
-                (character_id, avatar_url),
-            ).fetchone()
-        return str(row["avatar_url"])
+                (character_id, avatar_url, now, now),
+            )
+        return avatar_url
 
     def get_character_avatar_map(self) -> Dict[str, str]:
         self._ensure_database()
@@ -409,7 +383,7 @@ class DatabaseService:
                 """
                 SELECT avatar_url
                 FROM character_avatar_map
-                WHERE character_id = %s
+                WHERE character_id = ?
                 LIMIT 1
                 """,
                 (character_id,),
@@ -420,20 +394,19 @@ class DatabaseService:
         self._ensure_database()
         with self._connect() as connection:
             count_row = connection.execute(
-                "SELECT COUNT(*) AS count FROM chat_turns WHERE session_id = %s",
+                "SELECT COUNT(*) AS count FROM chat_turns WHERE session_id = ?",
                 (session_id,),
             ).fetchone()
             deleted = int(count_row["count"]) if count_row else 0
-            connection.execute("DELETE FROM chat_turns WHERE session_id = %s", (session_id,))
-            connection.execute("DELETE FROM chat_sessions WHERE id = %s", (session_id,))
+            connection.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
         return deleted
 
     def update_turn_debug(self, turn_id: int, debug: Dict[str, Any]) -> None:
         self._ensure_database()
         with self._connect() as connection:
             connection.execute(
-                "UPDATE chat_turns SET debug_json = %s WHERE id = %s",
-                (Json(debug), turn_id),
+                "UPDATE chat_turns SET debug_json = ? WHERE id = ?",
+                (_json(debug), turn_id),
             )
 
     def clear_sessions(self) -> int:
@@ -441,7 +414,6 @@ class DatabaseService:
         with self._connect() as connection:
             count_row = connection.execute("SELECT COUNT(*) AS count FROM chat_turns").fetchone()
             deleted = int(count_row["count"]) if count_row else 0
-            connection.execute("DELETE FROM chat_turns")
             connection.execute("DELETE FROM chat_sessions")
         return deleted
 
@@ -462,7 +434,7 @@ class DatabaseService:
         self._ensure_database()
         now = _now()
         with self._connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 INSERT INTO long_term_memories (
                     character_id,
@@ -478,25 +450,25 @@ class DatabaseService:
                     created_at,
                     updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     character_id,
                     memory_type,
                     content,
                     importance,
-                    Json(tags),
-                    is_pinned,
-                    is_editable,
+                    _json(tags),
+                    int(is_pinned),
+                    int(is_editable),
                     read_policy,
                     status,
                     expires_at,
                     now,
                     now,
                 ),
-            ).fetchone()
-        return self._row_to_memory(row)
+            )
+            memory_id = int(cursor.lastrowid)
+        return self._get_memory(memory_id)
 
     def list_memories(
         self,
@@ -512,9 +484,9 @@ class DatabaseService:
                     """
                     SELECT *
                     FROM long_term_memories
-                    WHERE character_id = %s
+                    WHERE character_id = ?
                     ORDER BY importance DESC, updated_at DESC
-                    LIMIT %s
+                    LIMIT ?
                     """,
                     (character_id, safe_limit),
                 ).fetchall()
@@ -524,7 +496,7 @@ class DatabaseService:
                     SELECT *
                     FROM long_term_memories
                     ORDER BY importance DESC, updated_at DESC
-                    LIMIT %s
+                    LIMIT ?
                     """,
                     (safe_limit,),
                 ).fetchall()
@@ -538,33 +510,34 @@ class DatabaseService:
         limit: int,
     ) -> List[Dict[str, Any]]:
         self._ensure_database()
+        now = _now()
         with self._connect() as connection:
             pinned_rows = connection.execute(
                 """
                 SELECT *
                 FROM long_term_memories
-                WHERE character_id = %s
+                WHERE character_id = ?
                   AND status = 'active'
-                  AND (is_pinned = TRUE OR read_policy = 'always')
+                  AND (is_pinned = 1 OR read_policy = 'always')
                   AND read_policy <> 'never'
-                  AND (expires_at IS NULL OR expires_at > NOW())
+                  AND (expires_at IS NULL OR expires_at > ?)
                 ORDER BY importance DESC, updated_at DESC, id DESC
                 """,
-                (character_id,),
+                (character_id, now),
             ).fetchall()
             normal_rows = connection.execute(
                 """
                 SELECT *
                 FROM long_term_memories
-                WHERE character_id = %s
+                WHERE character_id = ?
                   AND status = 'active'
-                  AND is_pinned = FALSE
+                  AND is_pinned = 0
                   AND read_policy = 'relevant'
-                  AND (expires_at IS NULL OR expires_at > NOW())
+                  AND (expires_at IS NULL OR expires_at > ?)
                 ORDER BY importance DESC, updated_at DESC, id DESC
                 LIMIT 300
                 """,
-                (character_id,),
+                (character_id, now),
             ).fetchall()
 
         pinned_memories = [self._row_to_memory(row) for row in pinned_rows]
@@ -607,24 +580,27 @@ class DatabaseService:
         if not memory_ids:
             return
         self._ensure_database()
+        placeholders = ",".join("?" for _ in memory_ids)
         with self._connect() as connection:
             connection.execute(
-                """
+                f"""
                 UPDATE long_term_memories
-                SET last_used_at = %s,
+                SET last_used_at = ?,
                     use_count = use_count + 1
-                WHERE id = ANY(%s)
+                WHERE id IN ({placeholders})
                 """,
-                (_now(), memory_ids),
+                tuple([_now(), *memory_ids]),
             )
 
     def delete_memory(self, memory_id: int) -> int:
         self._ensure_database()
         with self._connect() as connection:
             row = connection.execute(
-                "DELETE FROM long_term_memories WHERE id = %s RETURNING id",
+                "SELECT id FROM long_term_memories WHERE id = ?",
                 (memory_id,),
             ).fetchone()
+            if row:
+                connection.execute("DELETE FROM long_term_memories WHERE id = ?", (memory_id,))
         return 1 if row else 0
 
     def clear_memories(self, character_id: Optional[str] = None) -> int:
@@ -632,18 +608,16 @@ class DatabaseService:
         with self._connect() as connection:
             if character_id:
                 row = connection.execute(
-                    "SELECT COUNT(*) AS count FROM long_term_memories WHERE character_id = %s",
+                    "SELECT COUNT(*) AS count FROM long_term_memories WHERE character_id = ?",
                     (character_id,),
                 ).fetchone()
                 deleted = int(row["count"]) if row else 0
                 connection.execute(
-                    "DELETE FROM long_term_memories WHERE character_id = %s",
+                    "DELETE FROM long_term_memories WHERE character_id = ?",
                     (character_id,),
                 )
             else:
-                row = connection.execute(
-                    "SELECT COUNT(*) AS count FROM long_term_memories"
-                ).fetchone()
+                row = connection.execute("SELECT COUNT(*) AS count FROM long_term_memories").fetchone()
                 deleted = int(row["count"]) if row else 0
                 connection.execute("DELETE FROM long_term_memories")
         return deleted
@@ -653,19 +627,24 @@ class DatabaseService:
         now = _now()
         try:
             with self._connect() as connection:
-                row = connection.execute(
+                cursor = connection.execute(
                     """
                     INSERT INTO turn_feedback (turn_id, score, note, created_at)
-                    VALUES (%s, %s, %s, %s)
-                    RETURNING *
+                    VALUES (?, ?, ?, ?)
                     """,
                     (turn_id, score, note, now),
-                ).fetchone()
-        except psycopg.errors.ForeignKeyViolation as exc:
+                )
+                feedback_id = int(cursor.lastrowid)
+        except sqlite3.IntegrityError as exc:
             raise HTTPException(
                 status_code=404,
                 detail=f"Turn {turn_id} does not exist.",
             ) from exc
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM turn_feedback WHERE id = ?",
+                (feedback_id,),
+            ).fetchone()
         return {
             "id": row["id"],
             "turn_id": row["turn_id"],
@@ -689,7 +668,7 @@ class DatabaseService:
         self._ensure_database()
         now = _now()
         with self._connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 INSERT INTO persona_turn_feedback (
                     character_id,
@@ -702,8 +681,7 @@ class DatabaseService:
                     comment,
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     character_id,
@@ -712,10 +690,16 @@ class DatabaseService:
                     user_message,
                     assistant_message,
                     rating,
-                    Json(issue_tags),
+                    _json(issue_tags),
                     comment,
                     now,
                 ),
+            )
+            feedback_id = int(cursor.lastrowid)
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM persona_turn_feedback WHERE id = ?",
+                (feedback_id,),
             ).fetchone()
         return self._row_to_persona_feedback(row)
 
@@ -761,9 +745,9 @@ class DatabaseService:
                 """
                 SELECT *
                 FROM persona_turn_feedback
-                WHERE character_id = %s
+                WHERE character_id = ?
                 ORDER BY created_at DESC, id DESC
-                LIMIT %s
+                LIMIT ?
                 """,
                 (character_id, safe_limit),
             ).fetchall()
@@ -772,27 +756,17 @@ class DatabaseService:
     def export_data(self) -> Dict[str, Any]:
         self._ensure_database()
         with self._connect() as connection:
-            sessions = connection.execute(
-                "SELECT * FROM chat_sessions ORDER BY updated_at DESC"
-            ).fetchall()
-            turns = connection.execute(
-                "SELECT * FROM chat_turns ORDER BY id ASC"
-            ).fetchall()
-            memories = connection.execute(
-                "SELECT * FROM long_term_memories ORDER BY id ASC"
-            ).fetchall()
-            feedback = connection.execute(
-                "SELECT * FROM turn_feedback ORDER BY id ASC"
-            ).fetchall()
+            sessions = connection.execute("SELECT * FROM chat_sessions ORDER BY updated_at DESC").fetchall()
+            turns = connection.execute("SELECT * FROM chat_turns ORDER BY id ASC").fetchall()
+            memories = connection.execute("SELECT * FROM long_term_memories ORDER BY id ASC").fetchall()
+            feedback = connection.execute("SELECT * FROM turn_feedback ORDER BY id ASC").fetchall()
             persona_feedback = connection.execute(
                 "SELECT * FROM persona_turn_feedback ORDER BY id ASC"
             ).fetchall()
             relationship_memory = connection.execute(
                 "SELECT * FROM relationship_memory_events ORDER BY id ASC"
             ).fetchall()
-            knowledge = connection.execute(
-                "SELECT * FROM knowledge_items ORDER BY id ASC"
-            ).fetchall()
+            knowledge = connection.execute("SELECT * FROM knowledge_items ORDER BY id ASC").fetchall()
 
         return {
             "exported_at": _now(),
@@ -817,7 +791,7 @@ class DatabaseService:
         self._ensure_database()
         now = _now()
         with self._connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 INSERT INTO knowledge_items (
                     character_id,
@@ -828,12 +802,12 @@ class DatabaseService:
                     created_at,
                     updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (character_id, source_type, title, content, Json(tags), now, now),
-            ).fetchone()
-        return self._row_to_knowledge(row)
+                (character_id, source_type, title, content, _json(tags), now, now),
+            )
+            item_id = int(cursor.lastrowid)
+        return self._get_knowledge(item_id)
 
     def list_knowledge(
         self,
@@ -847,12 +821,11 @@ class DatabaseService:
         clauses = []
         params: List[Any] = []
         if character_id:
-            clauses.append("character_id = %s")
+            clauses.append("character_id = ?")
             params.append(character_id)
         if source_type:
-            clauses.append("source_type = %s")
+            clauses.append("source_type = ?")
             params.append(source_type)
-
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         params.append(safe_limit)
         with self._connect() as connection:
@@ -862,7 +835,7 @@ class DatabaseService:
                 FROM knowledge_items
                 {where}
                 ORDER BY updated_at DESC, id DESC
-                LIMIT %s
+                LIMIT ?
                 """,
                 tuple(params),
             ).fetchall()
@@ -878,7 +851,6 @@ class DatabaseService:
     ) -> List[Dict[str, Any]]:
         if limit <= 0:
             return []
-
         items = self.list_knowledge(
             character_id=character_id,
             source_type=source_type,
@@ -889,11 +861,9 @@ class DatabaseService:
             text = " ".join([item.title, item.content, " ".join(item.tags)])
             score = self._score(text, query)
             scored.append((score, index, item))
-
         positive = [item for item in scored if item[0] > 0]
         chosen = positive if positive else scored
         chosen = sorted(chosen, key=lambda item: (-item[0], item[1]))[:limit]
-
         hits: List[Dict[str, Any]] = []
         for score, _, item in chosen:
             hits.append(
@@ -917,9 +887,11 @@ class DatabaseService:
         self._ensure_database()
         with self._connect() as connection:
             row = connection.execute(
-                "DELETE FROM knowledge_items WHERE id = %s RETURNING id",
+                "SELECT id FROM knowledge_items WHERE id = ?",
                 (item_id,),
             ).fetchone()
+            if row:
+                connection.execute("DELETE FROM knowledge_items WHERE id = ?", (item_id,))
         return 1 if row else 0
 
     def clear_knowledge(
@@ -932,23 +904,19 @@ class DatabaseService:
         clauses = []
         params: List[Any] = []
         if character_id:
-            clauses.append("character_id = %s")
+            clauses.append("character_id = ?")
             params.append(character_id)
         if source_type:
-            clauses.append("source_type = %s")
+            clauses.append("source_type = ?")
             params.append(source_type)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-
         with self._connect() as connection:
             row = connection.execute(
                 f"SELECT COUNT(*) AS count FROM knowledge_items {where}",
                 tuple(params),
             ).fetchone()
             deleted = int(row["count"]) if row else 0
-            connection.execute(
-                f"DELETE FROM knowledge_items {where}",
-                tuple(params),
-            )
+            connection.execute(f"DELETE FROM knowledge_items {where}", tuple(params))
         return deleted
 
     def import_jsonl_knowledge(self, data_dir: Path, character_id: str) -> Dict[str, int]:
@@ -986,25 +954,57 @@ class DatabaseService:
                 inserted += 1
         return {"inserted": inserted, "skipped": skipped}
 
-    def _connect(self) -> psycopg.Connection:
-        return psycopg.connect(self.database_url, row_factory=dict_row)
+    def _get_memory(self, memory_id: int) -> MemoryRecord:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM long_term_memories WHERE id = ?",
+                (memory_id,),
+            ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Memory not found")
+        return self._row_to_memory(row)
+
+    def _get_knowledge(self, item_id: int) -> KnowledgeRecord:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM knowledge_items WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Knowledge item not found")
+        return self._row_to_knowledge(row)
+
+    def _connect(self) -> sqlite3.Connection:
+        self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(self.sqlite_path)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA journal_mode = WAL")
+        return connection
 
     def _ensure_database(self) -> None:
         if self._initialized:
             return
+        if settings.database_backend != "sqlite":
+            raise HTTPException(
+                status_code=500,
+                detail="Only SQLite is supported in the default local desktop runtime.",
+            )
         try:
-            self._init_database()
-        except psycopg.OperationalError as exc:
+            self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+            settings.upload_dir.mkdir(parents=True, exist_ok=True)
+            settings.backup_dir.mkdir(parents=True, exist_ok=True)
+            with self._connect() as connection:
+                sqlite_migration_service.run_migrations(connection)
+        except sqlite3.Error as exc:
             raise HTTPException(
                 status_code=503,
-                detail=f"Database connection failed before migration: {exc}",
+                detail=f"SQLite database initialization failed: {exc}",
             ) from exc
         self._initialized = True
 
-    def _init_database(self) -> None:
-        migration_service.run_migrations(self._connect)
-
-    def _row_to_turn(self, row: Dict[str, Any]) -> ChatTurnRecord:
+    def _row_to_turn(self, raw_row: sqlite3.Row | Dict[str, Any]) -> ChatTurnRecord:
+        row = _row(raw_row)
         candidates_json = self._ensure_json(row["candidates_json"], "chat_turns.candidates_json")
         if not isinstance(candidates_json, list):
             raise HTTPException(
@@ -1037,7 +1037,8 @@ class DatabaseService:
             created_at=self._as_text(row["created_at"]),
         )
 
-    def _row_to_memory(self, row: Dict[str, Any]) -> MemoryRecord:
+    def _row_to_memory(self, raw_row: sqlite3.Row | Dict[str, Any]) -> MemoryRecord:
+        row = _row(raw_row)
         tags = self._ensure_json(row["tags_json"], "long_term_memories.tags_json")
         if not isinstance(tags, list):
             raise HTTPException(
@@ -1058,11 +1059,12 @@ class DatabaseService:
             expires_at=self._as_text(row["expires_at"]) if row.get("expires_at") else None,
             created_at=self._as_text(row["created_at"]),
             updated_at=self._as_text(row["updated_at"]),
-            last_used_at=self._as_text(row["last_used_at"]) if row["last_used_at"] else None,
+            last_used_at=self._as_text(row["last_used_at"]) if row.get("last_used_at") else None,
             use_count=int(row.get("use_count") or 0),
         )
 
-    def _row_to_knowledge(self, row: Dict[str, Any]) -> KnowledgeRecord:
+    def _row_to_knowledge(self, raw_row: sqlite3.Row | Dict[str, Any]) -> KnowledgeRecord:
+        row = _row(raw_row)
         tags = self._ensure_json(row["tags_json"], "knowledge_items.tags_json")
         if not isinstance(tags, list):
             raise HTTPException(
@@ -1080,7 +1082,8 @@ class DatabaseService:
             updated_at=self._as_text(row["updated_at"]),
         )
 
-    def _row_to_user(self, row: Dict[str, Any]) -> UserRecord:
+    def _row_to_user(self, raw_row: sqlite3.Row | Dict[str, Any]) -> UserRecord:
+        row = _row(raw_row)
         return UserRecord(
             id=row["id"],
             username=row["username"],
@@ -1091,7 +1094,8 @@ class DatabaseService:
             updated_at=self._as_text(row["updated_at"]),
         )
 
-    def _row_to_persona_feedback(self, row: Dict[str, Any]) -> Dict[str, Any]:
+    def _row_to_persona_feedback(self, raw_row: sqlite3.Row | Dict[str, Any]) -> Dict[str, Any]:
+        row = _row(raw_row)
         tags = self._ensure_json(
             row["issue_tags_json"],
             "persona_turn_feedback.issue_tags_json",
@@ -1126,10 +1130,10 @@ class DatabaseService:
                 """
                 SELECT id
                 FROM knowledge_items
-                WHERE character_id = %s
-                  AND source_type = %s
-                  AND title = %s
-                  AND content = %s
+                WHERE character_id = ?
+                  AND source_type = ?
+                  AND title = ?
+                  AND content = ?
                 LIMIT 1
                 """,
                 (character_id, source_type, title, content),
@@ -1139,7 +1143,7 @@ class DatabaseService:
     def _read_jsonl(self, path: Path) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
         with path.open("r", encoding="utf-8") as file:
-            for line in file:
+            for line_no, line in enumerate(file, start=1):
                 line = line.strip()
                 if not line:
                     continue
@@ -1207,23 +1211,8 @@ class DatabaseService:
             )
         return value
 
-    def _plain_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        result: Dict[str, Any] = {}
-        for key, value in row.items():
-            if hasattr(value, "isoformat"):
-                result[key] = value.isoformat()
-            else:
-                result[key] = value
-        return result
-
-    def _masked_database_url(self) -> str:
-        parts = urlsplit(self.database_url)
-        if "@" not in parts.netloc:
-            return self.database_url
-        user_info, host_info = parts.netloc.rsplit("@", 1)
-        username = user_info.split(":", 1)[0]
-        netloc = f"{username}:***@{host_info}"
-        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    def _plain_row(self, raw_row: sqlite3.Row | Dict[str, Any]) -> Dict[str, Any]:
+        return dict(_row(raw_row))
 
     def _as_text(self, value: Any) -> str:
         if hasattr(value, "isoformat"):
@@ -1254,4 +1243,4 @@ class DatabaseService:
         return sorted(terms, key=lambda item: (-len(item), item))
 
 
-database_service = DatabaseService(settings.database_url)
+database_service = DatabaseService(settings.sqlite_db_path)

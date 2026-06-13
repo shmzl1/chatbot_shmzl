@@ -14,5 +14,6 @@ export interface HealthResponse {
   status: string;
   gptsovits: boolean;
   qdrant: boolean;
-  postgres: boolean;
+  database: boolean;
+  database_backend: string;
 }

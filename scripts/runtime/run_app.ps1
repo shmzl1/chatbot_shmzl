@@ -5,10 +5,8 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
 $BackendDir = Join-Path $ProjectRoot "backend"
-$ComposeFile = Join-Path $ProjectRoot "deploy\docker\docker-compose.yml"
 $CondaEnvName = "3-chatbot"
 $Url = "http://127.0.0.1:8000/docs"
-$PostgresContainerName = "role-chatbot-postgres"
 
 function Fail {
     param([string]$Message)
@@ -47,46 +45,6 @@ function Test-CondaEnvExists {
     return $false
 }
 
-function Wait-PostgresHealthy {
-    param(
-        [string]$ContainerName,
-        [int]$TimeoutSeconds = 60
-    )
-
-    Write-Host "正在等待 PostgreSQL 容器 healthy..."
-
-    $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    $LastStatus = ""
-
-    while ((Get-Date) -lt $Deadline) {
-        $Status = docker inspect `
-            --format "{{.State.Health.Status}}" `
-            $ContainerName `
-            2>$null
-
-        if ($LASTEXITCODE -eq 0) {
-            $LastStatus = "$Status".Trim()
-
-            if ($LastStatus -eq "healthy") {
-                Write-Host "PostgreSQL 容器已 healthy。"
-                return
-            }
-
-            if ($LastStatus -eq "unhealthy") {
-                Fail "PostgreSQL 容器状态为 unhealthy，请检查 Docker 日志。"
-            }
-        }
-
-        Start-Sleep -Seconds 2
-    }
-
-    if (-not $LastStatus) {
-        $LastStatus = "unknown"
-    }
-
-    Fail "PostgreSQL 容器 $ContainerName 未在 $TimeoutSeconds 秒内变为 healthy，当前状态：$LastStatus"
-}
-
 function Test-BackendDependencies {
     Write-Host "正在检查后端依赖..."
 
@@ -109,13 +67,8 @@ Write-Host "虚拟人物陪伴系统 - 一键启动" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "项目目录: $ProjectRoot"
 Write-Host "后端目录: $BackendDir"
-Write-Host "Compose 文件: $ComposeFile"
 Write-Host "Conda 环境: $CondaEnvName"
 Write-Host ""
-
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Fail "没有找到 docker 命令。请确认 Docker Desktop 已安装并正在运行。"
-}
 
 if (-not (Get-Command conda -ErrorAction SilentlyContinue)) {
     Fail "没有找到 conda 命令。请确认 Miniconda/Anaconda 已安装，并且 conda 在 PATH 中可用。"
@@ -129,10 +82,6 @@ if (-not (Test-Path -LiteralPath $BackendDir)) {
     Fail "没有找到后端目录：$BackendDir"
 }
 
-if (-not (Test-Path -LiteralPath $ComposeFile)) {
-    Fail "没有找到 Docker Compose 文件：$ComposeFile"
-}
-
 if (Test-PortInUse -Port 8000) {
     Write-Host "端口 8000 已经被占用，可能后端已经在运行。" -ForegroundColor Yellow
     Write-Host "不会重复启动多个后端。"
@@ -141,14 +90,6 @@ if (Test-PortInUse -Port 8000) {
     exit 0
 }
 
-Write-Host "正在启动 Docker 数据库..."
-docker compose --project-directory "$ProjectRoot" -f "$ComposeFile" up -d postgres adminer
-
-if ($LASTEXITCODE -ne 0) {
-    Fail "docker compose --project-directory `"$ProjectRoot`" -f `"$ComposeFile`" up -d postgres adminer 执行失败。请确认 Docker Desktop 正在运行。"
-}
-
-Wait-PostgresHealthy -ContainerName $PostgresContainerName
 Test-BackendDependencies
 
 Write-Host ""
@@ -161,7 +102,7 @@ Start-Process $Url
 
 Write-Host ""
 Write-Host "正在打开新的 PowerShell 窗口启动 FastAPI 后端。"
-Write-Host "本脚本不会执行 docker compose down 或 docker compose down -v。"
+Write-Host "后端会自动创建 backend\data\chatbot.db 并执行 SQLite migrations。"
 Write-Host ""
 
 $BackendCommand = @"

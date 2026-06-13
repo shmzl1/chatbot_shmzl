@@ -1,30 +1,23 @@
 import argparse
 import json
-import os
 from pathlib import Path
-
-import psycopg
-from dotenv import load_dotenv
-from psycopg.rows import dict_row
+import sys
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-load_dotenv(BACKEND_DIR / ".env")
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
-
-def database_url() -> str:
-    return os.getenv(
-        "DATABASE_URL",
-        "postgresql://chatbot:change_me_local_only@127.0.0.1:5432/role_chatbot",
-    )
+from services.database_service import database_service  # noqa: E402
 
 
 def export_sft(character_id: str, min_score: int, output_path: Path) -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with psycopg.connect(database_url(), row_factory=dict_row) as connection:
+    database_service.ensure_ready()
+    with database_service._connect() as connection:
         rows = connection.execute(
             """
-            SELECT DISTINCT ON (t.id)
+            SELECT
                 t.user_message,
                 t.reply,
                 t.emotion,
@@ -32,15 +25,20 @@ def export_sft(character_id: str, min_score: int, output_path: Path) -> int:
                 f.note
             FROM chat_turns t
             JOIN turn_feedback f ON f.turn_id = t.id
-            WHERE t.character_id = %s
-              AND f.score >= %s
-            ORDER BY t.id, f.score DESC, f.created_at DESC
+            WHERE t.character_id = ?
+              AND f.score >= ?
+            ORDER BY t.id ASC, f.score DESC, f.created_at DESC
             """,
             (character_id, min_score),
         ).fetchall()
 
     with output_path.open("w", encoding="utf-8") as file:
+        seen_keys: set[tuple[str, str]] = set()
         for row in rows:
+            key = (row["user_message"], row["reply"])
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
             item = {
                 "messages": [
                     {
@@ -54,12 +52,12 @@ def export_sft(character_id: str, min_score: int, output_path: Path) -> int:
                     "character_id": character_id,
                     "emotion": row["emotion"],
                     "score": row["score"],
-                    "note": row["note"],
+                    "note": row["note"] or "",
                 },
             }
             file.write(json.dumps(item, ensure_ascii=False) + "\n")
 
-    return len(rows)
+    return len(seen_keys)
 
 
 def main() -> None:

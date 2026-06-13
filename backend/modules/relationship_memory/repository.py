@@ -1,9 +1,10 @@
 """Repository for persisted relationship memory events."""
 
+import json
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
-from psycopg.types.json import Json
 
 from modules.relationship_memory.schemas import (
     RelationshipMemoryCreateRequest,
@@ -12,11 +13,24 @@ from modules.relationship_memory.schemas import (
 from services.database_service import database_service
 
 
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _row(row: Any) -> Dict[str, Any]:
+    return dict(row)
+
+
 class RelationshipMemoryRepository:
     def create(self, request: RelationshipMemoryCreateRequest) -> RelationshipMemoryEvent:
         database_service.ensure_ready()
+        now = _now()
         with database_service._connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 INSERT INTO relationship_memory_events (
                     character_id,
@@ -31,10 +45,11 @@ class RelationshipMemoryRepository:
                     is_editable,
                     read_policy,
                     status,
-                    expires_at
+                    expires_at,
+                    created_at,
+                    updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     request.character_id,
@@ -43,83 +58,97 @@ class RelationshipMemoryRepository:
                     request.source_turn_id,
                     request.memory_type,
                     request.content,
-                    Json(request.evidence),
+                    _json(request.evidence),
                     request.importance,
-                    request.is_pinned,
-                    request.is_editable,
+                    int(request.is_pinned),
+                    int(request.is_editable),
                     request.read_policy,
                     request.status,
                     request.expires_at,
+                    now,
+                    now,
                 ),
+            )
+            event_id = int(cursor.lastrowid)
+            row = connection.execute(
+                "SELECT * FROM relationship_memory_events WHERE id = ?",
+                (event_id,),
             ).fetchone()
         return self._row_to_event(row)
 
     def list_active(self, *, character_id: str, limit: int = 100) -> List[RelationshipMemoryEvent]:
         database_service.ensure_ready()
         safe_limit = max(1, min(limit, 500))
+        now = _now()
         with database_service._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT *
                 FROM relationship_memory_events
-                WHERE character_id = %s
-                  AND is_active = TRUE
+                WHERE character_id = ?
+                  AND is_active = 1
                   AND status = 'active'
-                  AND (expires_at IS NULL OR expires_at > NOW())
+                  AND (expires_at IS NULL OR expires_at > ?)
                 ORDER BY importance DESC, updated_at DESC, id DESC
-                LIMIT %s
+                LIMIT ?
                 """,
-                (character_id, safe_limit),
+                (character_id, now, safe_limit),
             ).fetchall()
         return [self._row_to_event(row) for row in rows]
 
     def list_prompt_events(self, *, character_id: str, limit: int = 5) -> List[RelationshipMemoryEvent]:
         database_service.ensure_ready()
         safe_limit = max(0, min(limit, 100))
+        now = _now()
         with database_service._connect() as connection:
             pinned_rows = connection.execute(
                 """
                 SELECT *
                 FROM relationship_memory_events
-                WHERE character_id = %s
-                  AND is_active = TRUE
+                WHERE character_id = ?
+                  AND is_active = 1
                   AND status = 'active'
-                  AND (is_pinned = TRUE OR read_policy = 'always')
+                  AND (is_pinned = 1 OR read_policy = 'always')
                   AND read_policy <> 'never'
-                  AND (expires_at IS NULL OR expires_at > NOW())
+                  AND (expires_at IS NULL OR expires_at > ?)
                 ORDER BY importance DESC, updated_at DESC, id DESC
                 """,
-                (character_id,),
+                (character_id, now),
             ).fetchall()
             normal_rows = connection.execute(
                 """
                 SELECT *
                 FROM relationship_memory_events
-                WHERE character_id = %s
-                  AND is_active = TRUE
+                WHERE character_id = ?
+                  AND is_active = 1
                   AND status = 'active'
-                  AND is_pinned = FALSE
+                  AND is_pinned = 0
                   AND read_policy = 'relevant'
-                  AND (expires_at IS NULL OR expires_at > NOW())
+                  AND (expires_at IS NULL OR expires_at > ?)
                 ORDER BY importance DESC, updated_at DESC, id DESC
-                LIMIT %s
+                LIMIT ?
                 """,
-                (character_id, safe_limit),
+                (character_id, now, safe_limit),
             ).fetchall()
         return [self._row_to_event(row) for row in [*pinned_rows, *normal_rows]]
 
     def deactivate(self, event_id: int) -> Optional[RelationshipMemoryEvent]:
         database_service.ensure_ready()
         with database_service._connect() as connection:
-            row = connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE relationship_memory_events
-                SET is_active = FALSE,
+                SET is_active = 0,
                     status = 'archived',
-                    updated_at = NOW()
-                WHERE id = %s
-                RETURNING *
+                    updated_at = ?
+                WHERE id = ?
                 """,
+                (_now(), event_id),
+            )
+            if cursor.rowcount <= 0:
+                return None
+            row = connection.execute(
+                "SELECT * FROM relationship_memory_events WHERE id = ?",
                 (event_id,),
             ).fetchone()
         return self._row_to_event(row) if row else None
@@ -128,15 +157,16 @@ class RelationshipMemoryRepository:
         if not event_ids:
             return
         database_service.ensure_ready()
+        placeholders = ",".join("?" for _ in event_ids)
         with database_service._connect() as connection:
             connection.execute(
-                """
+                f"""
                 UPDATE relationship_memory_events
-                SET last_used_at = NOW(),
+                SET last_used_at = ?,
                     use_count = use_count + 1
-                WHERE id = ANY(%s)
+                WHERE id IN ({placeholders})
                 """,
-                (event_ids,),
+                tuple([_now(), *event_ids]),
             )
 
     def debug(
@@ -150,7 +180,7 @@ class RelationshipMemoryRepository:
         clauses = []
         params: List[Any] = []
         if character_id:
-            clauses.append("character_id = %s")
+            clauses.append("character_id = ?")
             params.append(character_id)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
@@ -159,7 +189,7 @@ class RelationshipMemoryRepository:
                 f"SELECT COUNT(*) AS count FROM relationship_memory_events {where}",
                 tuple(params),
             ).fetchone()
-            active_where = f"{where} AND is_active = TRUE" if where else "WHERE is_active = TRUE"
+            active_where = f"{where} AND is_active = 1" if where else "WHERE is_active = 1"
             active_row = connection.execute(
                 f"SELECT COUNT(*) AS count FROM relationship_memory_events {active_where}",
                 tuple(params),
@@ -170,7 +200,7 @@ class RelationshipMemoryRepository:
                 FROM relationship_memory_events
                 {where}
                 ORDER BY updated_at DESC, id DESC
-                LIMIT %s
+                LIMIT ?
                 """,
                 tuple([*params, safe_limit]),
             ).fetchall()
@@ -182,8 +212,17 @@ class RelationshipMemoryRepository:
             "events": [self._row_to_event(row) for row in rows],
         }
 
-    def _row_to_event(self, row: Dict[str, Any]) -> RelationshipMemoryEvent:
+    def _row_to_event(self, raw_row: Any) -> RelationshipMemoryEvent:
+        row = _row(raw_row)
         evidence = row["evidence"]
+        if isinstance(evidence, str):
+            try:
+                evidence = json.loads(evidence)
+            except json.JSONDecodeError as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"relationship_memory_events.evidence for event {row['id']} is invalid JSON.",
+                ) from exc
         if evidence is None:
             evidence = {}
         if not isinstance(evidence, dict):
@@ -201,7 +240,7 @@ class RelationshipMemoryRepository:
             content=row["content"],
             evidence=evidence,
             importance=row["importance"],
-            is_active=row["is_active"],
+            is_active=bool(row["is_active"]),
             is_pinned=bool(row.get("is_pinned", False)),
             is_editable=bool(row.get("is_editable", True)),
             read_policy=str(row.get("read_policy") or "relevant"),
