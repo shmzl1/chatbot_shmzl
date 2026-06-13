@@ -1,15 +1,17 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Eraser, MessageCircle } from "lucide-react";
-import { listCharacters, sendChatMessage } from "../api/chatApi";
+import { useEffect } from "react";
+import { listCharacters, listChatSessions, listChatTurns, sendChatMessage } from "../api/chatApi";
 import { ChatComposer } from "../components/chat/ChatComposer";
+import { CompactContextChip } from "../components/chat/CompactContextChip";
 import { MessageBubble } from "../components/chat/MessageBubble";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
-import { Tag } from "../components/ui/Tag";
 import { useAppStore } from "../stores/appStore";
 import { useChatStore } from "../stores/chatStore";
 
 export function ChatPage() {
+  const queryClient = useQueryClient();
   const selectedDiary = useAppStore((state) => state.selectedDiary);
   const setSelectedDiary = useAppStore((state) => state.setSelectedDiary);
   const pendingChatDraft = useAppStore((state) => state.pendingChatDraft);
@@ -17,10 +19,47 @@ export function ChatPage() {
   const sessionId = useChatStore((state) => state.sessionId);
   const messages = useChatStore((state) => state.messages);
   const setSessionId = useChatStore((state) => state.setSessionId);
+  const setMessages = useChatStore((state) => state.setMessages);
   const appendMessage = useChatStore((state) => state.appendMessage);
   const clearMessages = useChatStore((state) => state.clearMessages);
-  const charactersQuery = useQuery({ queryKey: ["characters"], queryFn: listCharacters });
+  const charactersQuery = useQuery({ queryKey: ["characters"], queryFn: listCharacters, retry: 0 });
+  const sessionsQuery = useQuery({ queryKey: ["chat", "sessions"], queryFn: () => listChatSessions(12), retry: 0 });
+  const turnsQuery = useQuery({
+    queryKey: ["chat", "turns", sessionId],
+    queryFn: () => listChatTurns(sessionId!),
+    enabled: Boolean(sessionId),
+    retry: 0,
+  });
   const characterId = charactersQuery.data?.characters?.[0]?.id || "role01";
+
+  useEffect(() => {
+    const firstSession = sessionsQuery.data?.sessions?.[0];
+    if (!sessionId && !messages.length && firstSession) {
+      setSessionId(firstSession.id);
+    }
+  }, [messages.length, sessionId, sessionsQuery.data, setSessionId]);
+
+  useEffect(() => {
+    const turns = turnsQuery.data?.turns;
+    if (!turns) {
+      return;
+    }
+    setMessages(
+      turns.flatMap((turn) => [
+        {
+          id: `user-${turn.id}`,
+          role: "user" as const,
+          content: turn.user_message,
+        },
+        {
+          id: `assistant-${turn.id}`,
+          role: "assistant" as const,
+          content: turn.reply,
+          emotion: turn.emotion,
+        },
+      ]),
+    );
+  }, [turnsQuery.data, setMessages]);
 
   const sendMutation = useMutation({
     mutationFn: async (message: string) => {
@@ -43,6 +82,7 @@ export function ChatPage() {
         content: payload.reply,
         emotion: payload.emotion,
       });
+      void queryClient.invalidateQueries({ queryKey: ["chat", "sessions"] });
     },
     onError: (error) => {
       appendMessage({
@@ -68,12 +108,7 @@ export function ChatPage() {
           </div>
         </div>
         <div className="chat-context-actions">
-          {selectedDiary ? (
-            <Tag>
-              <BookOpen size={13} />
-              正在阅读：{selectedDiary.title || "未命名日记"}
-            </Tag>
-          ) : null}
+          <CompactContextChip selectedDiary={selectedDiary} onClear={() => setSelectedDiary(null)} />
           <Button variant="ghost" onClick={clearMessages}>
             <Eraser size={16} />
             清空
@@ -81,8 +116,32 @@ export function ChatPage() {
         </div>
       </section>
 
+      {sessionsQuery.error instanceof Error ? (
+        <div className="inline-error">{sessionsQuery.error.message}</div>
+      ) : sessionsQuery.data?.sessions?.length ? (
+        <section className="chat-session-strip" aria-label="最近会话">
+          {sessionsQuery.data.sessions.slice(0, 6).map((session) => (
+            <button
+              className={session.id === sessionId ? "active" : ""}
+              key={session.id}
+              type="button"
+              onClick={() => setSessionId(session.id)}
+            >
+              <BookOpen size={13} />
+              <span>{session.last_user_message || session.last_reply || session.id}</span>
+            </button>
+          ))}
+        </section>
+      ) : null}
+
       <section className="chat-stream paper-sheet">
-        {messages.length ? (
+        {turnsQuery.error instanceof Error ? (
+          <EmptyState
+            icon={<MessageCircle size={24} />}
+            title="聊天记录加载失败"
+            description={turnsQuery.error.message}
+          />
+        ) : messages.length ? (
           <div className="chat-message-stack">
             {messages.map((message) => (
               <MessageBubble key={message.id} message={message} />
@@ -96,15 +155,6 @@ export function ChatPage() {
           />
         )}
       </section>
-
-      {selectedDiary ? (
-        <div className="chat-diary-context">
-          <span>本轮发送会携带日记上下文：{selectedDiary.title || "未命名日记"}</span>
-          <Button variant="ghost" onClick={() => setSelectedDiary(null)}>
-            清空上下文
-          </Button>
-        </div>
-      ) : null}
 
       <ChatComposer
         disabled={sendMutation.isPending || charactersQuery.isLoading}

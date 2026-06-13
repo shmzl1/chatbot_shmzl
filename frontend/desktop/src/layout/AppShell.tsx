@@ -4,7 +4,6 @@ import { SchedulePage } from "../pages/SchedulePage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { useAppStore } from "../stores/appStore";
-import { RightPanel } from "./RightPanel";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { WindowFrame } from "./WindowFrame";
@@ -34,7 +33,6 @@ export function AppShell() {
             </ErrorBoundary>
           </section>
         </main>
-        <RightPanel />
       </div>
     </div>
   );

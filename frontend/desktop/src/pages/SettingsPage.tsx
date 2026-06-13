@@ -115,10 +115,11 @@ export function SettingsPage() {
           </p>
         </StickyCard>
         <StickyCard>
-          <h3 className="mb-2 text-lg font-black">角色与记忆</h3>
-          <p className="text-sm leading-6 text-[var(--muted)]">
-            角色管理、记忆管理和人设编辑属于嵌入能力，后续放入设置的高级区域，不作为一级主功能。
-          </p>
+          <h3 className="mb-3 text-lg font-black">高级设置</h3>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="ghost" type="button">角色管理</Button>
+            <Button variant="ghost" type="button">记忆管理</Button>
+          </div>
         </StickyCard>
         <Dialog.Root>
           <Dialog.Trigger asChild>

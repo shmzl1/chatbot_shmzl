@@ -56,7 +56,7 @@ button {
 
 .app-body {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) auto;
+  grid-template-columns: 92px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -249,10 +249,4 @@ select {
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
-}
-
-@media (max-width: 1279px) {
-  .app-body {
-    grid-template-columns: 92px minmax(0, 1fr);
-  }
 }

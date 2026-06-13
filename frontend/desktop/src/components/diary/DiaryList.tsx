@@ -9,6 +9,14 @@ interface DiaryListProps {
   onSelect: (entryId: number) => void;
 }
 
+function compactDate(value: string): string {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return `${match[2]}/${match[3]}`;
+  }
+  return value;
+}
+
 export function DiaryList({ entries, activeEntryId, onSelect }: DiaryListProps) {
   if (!entries.length) {
     return <EmptyState icon={<BookOpen size={22} />} title="还没有日记" description="写一篇今天的记录吧。" />;
@@ -25,7 +33,7 @@ export function DiaryList({ entries, activeEntryId, onSelect }: DiaryListProps) 
         >
           <div className="diary-note-card-head">
             <strong>{entry.title || "未命名日记"}</strong>
-            <span>{entry.entry_date}</span>
+            <span title={entry.entry_date}>{compactDate(entry.entry_date)}</span>
           </div>
           <p>{entry.content_excerpt || "没有正文"}</p>
           <div className="diary-note-card-tags">

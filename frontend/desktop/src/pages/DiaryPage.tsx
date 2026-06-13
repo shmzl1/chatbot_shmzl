@@ -177,6 +177,9 @@ export function DiaryPage() {
           <div className="inline-error">
             <AlertCircle size={16} />
             <span>{listError}</span>
+            <Button className="ml-auto h-8 min-h-8 px-3" variant="ghost" type="button" onClick={() => void listQuery.refetch()}>
+              重试
+            </Button>
           </div>
         ) : listQuery.isLoading ? (
           <div className="paper-empty">正在读取日记...</div>

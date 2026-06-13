@@ -104,6 +104,14 @@ class Settings:
     gptsovits_base_url: str = _gptsovits_base_url()
     gptsovits_timeout_seconds: float = float(os.getenv("GPTSOVITS_TIMEOUT_SECONDS", "120"))
     avatar_max_size_mb: int = int(os.getenv("AVATAR_MAX_SIZE_MB", "5"))
+    cors_origins: tuple[str, ...] = (
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:5174",
+        "http://localhost:5174",
+    )
+    cors_methods: tuple[str, ...] = ("OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE")
+    cors_headers: tuple[str, ...] = ("*",)
 
     def get_llm_config(self, profile: str) -> dict:
         if profile == "chat":

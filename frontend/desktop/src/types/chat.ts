@@ -33,6 +33,35 @@ export interface ChatTextResponse {
   debug: Record<string, unknown>;
 }
 
+export interface ChatSessionSummary {
+  id: string;
+  character_id: string;
+  created_at: string;
+  updated_at: string;
+  turn_count: number;
+  last_user_message?: string | null;
+  last_reply?: string | null;
+}
+
+export interface ChatSessionListResponse {
+  sessions: ChatSessionSummary[];
+}
+
+export interface ChatTurnRecord {
+  id: number;
+  session_id: string;
+  character_id: string;
+  user_message: string;
+  reply: string;
+  emotion: string;
+  created_at: string;
+}
+
+export interface ChatTurnListResponse {
+  session_id: string;
+  turns: ChatTurnRecord[];
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";

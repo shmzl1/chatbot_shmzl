@@ -47,7 +47,7 @@
 /* Chat */
 .chat-workspace {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 14px;
 }
 
@@ -103,6 +103,113 @@
   flex-wrap: wrap;
   justify-content: end;
   gap: 8px;
+}
+
+.context-mini-hint,
+.context-chip {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(61, 70, 58, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.48);
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.context-chip {
+  max-width: min(360px, 36vw);
+  color: var(--green);
+}
+
+.context-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-chip button {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.context-dialog {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 40;
+  width: min(440px, calc(100vw - 48px));
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 20px;
+  box-shadow: var(--shadow-paper);
+}
+
+.context-dialog h2,
+.context-dialog [data-radix-dialog-title] {
+  margin: 0;
+}
+
+.context-dialog p,
+.context-dialog [data-radix-dialog-description] {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.context-dialog-actions {
+  display: flex;
+  justify-content: end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.chat-session-strip {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.chat-session-strip button {
+  display: inline-flex;
+  min-width: 128px;
+  max-width: 230px;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(61, 70, 58, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 250, 241, 0.58);
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chat-session-strip button.active {
+  border-color: rgba(95, 117, 91, 0.42);
+  background: rgba(95, 117, 91, 0.12);
+  color: var(--green);
+}
+
+.chat-session-strip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-stream {
@@ -213,6 +320,7 @@
 
 .diary-sidebar {
   grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow-x: hidden;
 }
 
 .diary-sidebar-actions {
@@ -231,7 +339,9 @@
 .diary-note-list {
   display: grid;
   gap: 10px;
+  min-width: 0;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -240,6 +350,7 @@
   display: grid;
   gap: 8px;
   width: 100%;
+  min-width: 0;
   padding: 13px;
   border: 1px solid rgba(103, 84, 54, 0.14);
   border-radius: 8px;
@@ -269,6 +380,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  min-width: 0;
 }
 
 .diary-note-card-head strong,
@@ -279,10 +391,22 @@
 }
 
 .diary-note-card-head strong {
+  min-width: 0;
   font-size: 14px;
 }
 
-.diary-note-card-head span,
+.diary-note-card-head span {
+  max-width: 54px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(89, 111, 132, 0.1);
+  padding: 2px 7px;
+  color: var(--blue);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .diary-note-card p {
   color: var(--muted);
   font-size: 12px;
@@ -291,6 +415,7 @@
 .diary-note-card p {
   display: -webkit-box;
   margin: 0;
+  min-width: 0;
   overflow: hidden;
   line-height: 1.6;
   -webkit-box-orient: vertical;
@@ -302,6 +427,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 
 .diary-paper {
