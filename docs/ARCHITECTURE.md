@@ -82,6 +82,18 @@ frontend/desktop diary page
   -> backend/data/uploads/diary/images
 ```
 
+日程：
+
+```text
+frontend/desktop schedule page
+  -> modules.schedule.api
+  -> modules.schedule.service
+  -> modules.schedule.repository
+  -> schedule_items / schedule_occurrences / schedule_completion_logs in SQLite
+```
+
+日程第一阶段提供任务 CRUD、选中日期任务、月历汇总、完成、跳过和延期。延期不会覆盖历史 occurrence，而是把旧 occurrence 标记为 `postponed`，再创建新的 `pending` occurrence。计划、自动复习、AI 排程、通知和聊天集成属于后续阶段；日程默认不进入聊天 prompt。
+
 人设编辑：
 
 ```text

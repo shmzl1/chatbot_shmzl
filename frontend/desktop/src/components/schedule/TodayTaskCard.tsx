@@ -1,37 +1,53 @@
 import { Check, Clock3, FastForward } from "lucide-react";
-import { Button } from "../ui/Button";
+import type { ScheduleItemSummary } from "../../types/schedule";
+import { schedulePriorityLabels, scheduleStatusLabels, scheduleTypeLabels } from "../../types/schedule";
 
-export function TodayTaskCard() {
+interface TodayTaskCardProps {
+  item: ScheduleItemSummary;
+  onComplete: () => void;
+  onPostpone: () => void;
+  onSkip: () => void;
+}
+
+export function TodayTaskCard({ item, onComplete, onPostpone, onSkip }: TodayTaskCardProps) {
+  const isActionable = item.current_occurrence.status === "pending" || item.current_occurrence.status === "overdue";
+
   return (
-    <section className="note-card rounded-[24px] p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--muted)]">Today</p>
-          <h3 className="mt-1 text-xl font-black">今日任务</h3>
-        </div>
-        <span className="rounded-full bg-[rgba(188,139,79,0.14)] px-3 py-1 text-xs font-black text-[var(--gold)]">
-          日程后端暂未实现
+    <section className={`schedule-task-card ${item.current_occurrence.status}`}>
+      <div className="schedule-task-head">
+        <strong>{item.title}</strong>
+        <span className={`schedule-status ${item.current_occurrence.status}`}>
+          {scheduleStatusLabels[item.current_occurrence.status]}
         </span>
       </div>
-      <div className="grid gap-3">
-        <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[rgba(255,250,241,0.64)] p-5 text-sm leading-6 text-[var(--muted)]">
-          日程页先保留桌面端结构：今日任务、任务状态、计划卡片和月历视图。后端接口实现后再接真实数据。
+      <p>{item.note || "没有备注"}</p>
+      <div className="schedule-task-meta">
+        <span>{scheduleTypeLabels[item.item_type]}</span>
+        <span>{schedulePriorityLabels[item.priority]}</span>
+        <span>{item.current_occurrence.scheduled_time || "全天"}</span>
+        {item.estimated_minutes ? <span>{item.estimated_minutes} 分钟</span> : null}
+      </div>
+      {item.tags.length ? (
+        <div className="schedule-tag-preview">
+          {item.tags.slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button disabled variant="secondary">
+      ) : null}
+      {isActionable ? (
+        <div className="schedule-action-row">
+          <button type="button" onClick={onComplete}>
             <Check size={16} />
             完成
-          </Button>
-          <Button disabled variant="secondary">
+          </button>
+          <button type="button" onClick={onPostpone}>
             <Clock3 size={16} />
             延期
-          </Button>
-          <Button disabled variant="secondary">
+          </button>
+          <button type="button" onClick={onSkip}>
             <FastForward size={16} />
             跳过
-          </Button>
+          </button>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }

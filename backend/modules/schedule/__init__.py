@@ -1,2 +1,1 @@
-"""Schedule module placeholder."""
-
+"""Local schedule MVP module."""

@@ -154,6 +154,23 @@ POST   /diary/entries/{entry_id}/images
 DELETE /diary/images/{image_id}
 ```
 
+日程：
+
+```text
+GET    /schedule/items
+POST   /schedule/items
+GET    /schedule/items/{item_id}
+PUT    /schedule/items/{item_id}
+DELETE /schedule/items/{item_id}
+GET    /schedule/today
+GET    /schedule/calendar
+POST   /schedule/occurrences/{occurrence_id}/complete
+POST   /schedule/occurrences/{occurrence_id}/skip
+POST   /schedule/occurrences/{occurrence_id}/postpone
+```
+
+日程第一阶段 MVP 使用 `schedule_items`、`schedule_occurrences`、`schedule_completion_logs` 三张 SQLite 表。延期会把旧 occurrence 标记为 `postponed`，再创建新的 `pending` occurrence；计划、自动复习、AI 排程、系统通知和聊天集成属于后续阶段。日程默认不进入聊天 prompt。
+
 人设编辑：
 
 ```text

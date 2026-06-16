@@ -76,6 +76,14 @@ backend/database/sqlite_migrations/
 
 聊天请求只有显式传入 `diary_entry_id` 时，才能通过 `modules.diary.context` 读取该篇日记。普通聊天不应读取全部日记。
 
+## 日程
+
+日程模块位于 `backend/modules/schedule/`。第一阶段 MVP 使用 `schedule_items`、`schedule_occurrences`、`schedule_completion_logs` 三张 SQLite 表，不创建 `schedule_plans`。
+
+日程接口由 `backend/main.py` 注册到 `/schedule`。前端 `frontend/desktop/src/pages/SchedulePage.tsx` 通过 `scheduleApi.ts` 调用真实 FastAPI 接口，不使用 mock、fallback 或 localStorage 保存任务。
+
+第一阶段只支持任务 CRUD、选中日期任务、月历汇总、完成、跳过和延期。延期必须保留旧 occurrence 并创建新 occurrence。计划、自动复习、AI 排程、系统通知和聊天集成属于后续阶段。普通聊天不应自动读取日程。
+
 ## relationship_memory
 
 关系记忆使用 `relationship_memory_events` 表。普通聊天读取有效关系记忆加入长期上下文，同时继续保留 `long_term_memories` 兼容。
