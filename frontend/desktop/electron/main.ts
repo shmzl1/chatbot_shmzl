@@ -8,8 +8,8 @@ function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1360,
     height: 880,
-    minWidth: 1100,
-    minHeight: 720,
+    minWidth: 1024,
+    minHeight: 700,
     title: "虚拟人物陪伴系统",
     backgroundColor: "#f5f1e8",
     show: false,

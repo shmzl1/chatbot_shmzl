@@ -22,21 +22,13 @@ Get-Content -Raw -Encoding UTF8 docs/CODEX_GUIDE.md
 backend/data/chatbot.db
 ```
 
-普通运行不需要 Docker、PostgreSQL 或 Adminer。不要恢复 `DATABASE_URL="postgresql://..."` 作为默认配置，不要让普通启动脚本调用 `docker compose up`。
+普通运行不需要 Docker、PostgreSQL 或 Adminer。不要恢复旧数据库 URL 配置，不要让普通启动脚本调用 Docker。
 
 SQLite 迁移位于：
 
 ```text
 backend/database/sqlite_migrations/
 ```
-
-旧 PostgreSQL 迁移只保留在：
-
-```text
-backend/database/legacy_postgres_migrations/
-```
-
-它们仅用于历史参考和旧数据迁移对照，不参与后端启动。
 
 ## 文件位置
 
@@ -45,7 +37,6 @@ backend/database/legacy_postgres_migrations/
 - 默认 SQLite 文件：`backend/data/chatbot.db`。
 - 默认上传目录：`backend/data/uploads/`。
 - 后端依赖文件：`backend/requirements.txt`。
-- 旧 PostgreSQL 到 SQLite 迁移脚本：`backend/scripts/migrate_postgres_to_sqlite.py`。
 - 唯一前端：`frontend/desktop/`。
 - 启动/暂停脚本：`scripts/runtime/`。
 
@@ -56,9 +47,6 @@ backend/database/legacy_postgres_migrations/
 除非用户明确要求，不要自动执行：
 
 - `uvicorn main:app --reload`
-- `docker compose up`
-- `docker compose down`
-- `docker compose down -v`
 - `git commit`
 - `git push`
 
@@ -66,11 +54,7 @@ backend/database/legacy_postgres_migrations/
 
 ## 后端依赖
 
-普通启动依赖不包含 psycopg。只有用户从旧 PostgreSQL 迁移数据时，才需要可选安装：
-
-```powershell
-python -m pip install "psycopg[binary]"
-```
+普通启动依赖不包含数据库驱动扩展包，SQLite 使用 Python 标准库。
 
 ## LLM
 

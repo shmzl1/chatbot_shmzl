@@ -40,12 +40,15 @@ id_rsa
 id_rsa.pub
 
 # Local databases, vector stores, and generated data
+backend/data/chatbot.db
+backend/data/chatbot.db-*
+backend/data/*.db
+backend/data/*.db-*
 *.sqlite
 *.sqlite3
 *.sqlite3-shm
 *.sqlite3-wal
 *.db
-postgres_data/
 qdrant_storage/
 
 # Temporary files, upload cache, and local screenshots
@@ -54,6 +57,8 @@ temp/
 .cache/
 /uploads/
 /backend/uploads/
+backend/data/uploads/
+backend/data/backups/
 backend/data/uploads/*
 !backend/data/uploads/.gitkeep
 !backend/data/uploads/avatars/

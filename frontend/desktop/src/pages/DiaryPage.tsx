@@ -1,6 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
-import { AlertCircle, BookOpen, CalendarDays, Plus, Save, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  BookOpen,
+  CalendarDays,
+  Filter,
+  MessageCircle,
+  Plus,
+  Save,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   createDiaryEntry,
@@ -15,6 +25,7 @@ import { DiaryImages } from "../components/diary/DiaryImages";
 import { DiaryList } from "../components/diary/DiaryList";
 import { PaperPanel } from "../components/paper/PaperPanel";
 import { Button } from "../components/ui/Button";
+import { EmptyState } from "../components/ui/EmptyState";
 import { TextField } from "../components/ui/TextField";
 import { useAppStore } from "../stores/appStore";
 import { useDiaryStore } from "../stores/diaryStore";
@@ -22,6 +33,16 @@ import type { DiaryEntryPayload, DiaryFilters } from "../types/diary";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function emptyDraft(): DiaryEntryPayload {
+  return {
+    title: "",
+    content_markdown: "",
+    entry_date: today(),
+    mood: "",
+    tags: [],
+  };
 }
 
 function parseTags(value: string) {
@@ -38,14 +59,11 @@ export function DiaryPage() {
   const setActiveView = useAppStore((state) => state.setActiveView);
   const setSelectedDiary = useAppStore((state) => state.setSelectedDiary);
   const setPendingChatDraft = useAppStore((state) => state.setPendingChatDraft);
+  const [mode, setMode] = useState<"list" | "editor">("list");
+  const [editorTab, setEditorTab] = useState<"write" | "preview">("write");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<DiaryFilters>({});
-  const [draft, setDraft] = useState<DiaryEntryPayload>({
-    title: "",
-    content_markdown: "",
-    entry_date: today(),
-    mood: "",
-    tags: [],
-  });
+  const [draft, setDraft] = useState<DiaryEntryPayload>(emptyDraft);
   const [tagInput, setTagInput] = useState("");
 
   const listQuery = useQuery({
@@ -60,7 +78,7 @@ export function DiaryPage() {
 
   useEffect(() => {
     const entry = detailQuery.data;
-    if (!entry) {
+    if (!entry || mode !== "editor") {
       return;
     }
     setDraft({
@@ -71,7 +89,7 @@ export function DiaryPage() {
       tags: entry.tags || [],
     });
     setTagInput((entry.tags || []).join("，"));
-  }, [detailQuery.data]);
+  }, [detailQuery.data, mode]);
 
   const payload = useMemo<DiaryEntryPayload>(
     () => ({
@@ -93,8 +111,9 @@ export function DiaryPage() {
     mutationFn: () => deleteDiaryEntry(activeEntryId!),
     onSuccess: () => {
       setActiveEntryId(null);
-      setDraft({ title: "", content_markdown: "", entry_date: today(), mood: "", tags: [] });
+      setDraft(emptyDraft());
       setTagInput("");
+      setMode("list");
       void queryClient.invalidateQueries({ queryKey: ["diary"] });
     },
   });
@@ -135,8 +154,20 @@ export function DiaryPage() {
 
   function newEntry() {
     setActiveEntryId(null);
-    setDraft({ title: "", content_markdown: "", entry_date: today(), mood: "", tags: [] });
+    setDraft(emptyDraft());
     setTagInput("");
+    setEditorTab("write");
+    setMode("editor");
+  }
+
+  function openEntry(entryId: number) {
+    setActiveEntryId(entryId);
+    setEditorTab("write");
+    setMode("editor");
+  }
+
+  function backToList() {
+    setMode("list");
   }
 
   function readWithCharacter() {
@@ -149,32 +180,63 @@ export function DiaryPage() {
     setActiveView("chat");
   }
 
-  return (
-    <div className="diary-workspace">
-      <aside className="diary-sidebar">
-        <div className="page-kicker">
-          <span>Notebook</span>
-          <strong>日记列表</strong>
-        </div>
-        <div className="diary-sidebar-actions">
-          <Button className="px-3" variant="primary" type="button" onClick={newEntry}>
-            <Plus size={16} />
-            新建
-          </Button>
-        </div>
-        <div className="diary-filter-card">
-          <TextField placeholder="搜索" onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))} />
-          <div className="grid grid-cols-2 gap-2">
-            <TextField type="date" onChange={(event) => setFilters((current) => ({ ...current, date_from: event.target.value }))} />
-            <TextField type="date" onChange={(event) => setFilters((current) => ({ ...current, date_to: event.target.value }))} />
+  if (mode === "list") {
+    return (
+      <div className="diary-page diary-list-view">
+        <section className="diary-list-toolbar soft-panel">
+          <div className="page-kicker">
+            <span>Notebook</span>
+            <strong>日记</strong>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <TextField placeholder="心情" onChange={(event) => setFilters((current) => ({ ...current, mood: event.target.value }))} />
-            <TextField placeholder="标签" onChange={(event) => setFilters((current) => ({ ...current, tag: event.target.value }))} />
+          <div className="diary-list-actions">
+            <TextField
+              aria-label="搜索日记"
+              placeholder="搜索标题或正文"
+              value={filters.keyword || ""}
+              onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))}
+            />
+            <Button variant="secondary" type="button" onClick={() => setFiltersOpen((current) => !current)}>
+              <Filter size={16} />
+              筛选
+            </Button>
+            <Button variant="primary" type="button" onClick={newEntry}>
+              <Plus size={16} />
+              新建日记
+            </Button>
           </div>
-        </div>
+        </section>
+
+        {filtersOpen ? (
+          <section className="diary-filter-panel soft-panel" aria-label="日记筛选">
+            <TextField
+              label="开始日期"
+              type="date"
+              value={filters.date_from || ""}
+              onChange={(event) => setFilters((current) => ({ ...current, date_from: event.target.value }))}
+            />
+            <TextField
+              label="结束日期"
+              type="date"
+              value={filters.date_to || ""}
+              onChange={(event) => setFilters((current) => ({ ...current, date_to: event.target.value }))}
+            />
+            <TextField
+              label="心情"
+              placeholder="例如：烦、累、还行"
+              value={filters.mood || ""}
+              onChange={(event) => setFilters((current) => ({ ...current, mood: event.target.value }))}
+            />
+            <TextField
+              label="标签"
+              placeholder="输入一个标签"
+              value={filters.tag || ""}
+              onChange={(event) => setFilters((current) => ({ ...current, tag: event.target.value }))}
+            />
+          </section>
+        ) : null}
+
         {listError ? (
-          <div className="inline-error">
+          <div className="inline-error diary-list-error">
             <AlertCircle size={16} />
             <span>{listError}</span>
             <Button className="ml-auto h-8 min-h-8 px-3" variant="ghost" type="button" onClick={() => void listQuery.refetch()}>
@@ -187,88 +249,125 @@ export function DiaryPage() {
           <DiaryList
             activeEntryId={activeEntryId}
             entries={listQuery.data?.entries || []}
-            onSelect={(entryId) => setActiveEntryId(entryId)}
+            onSelect={openEntry}
           />
         )}
-      </aside>
+      </div>
+    );
+  }
 
-      <PaperPanel className="diary-paper">
-        <div className="diary-paper-head">
+  return (
+    <div className="diary-page diary-editor-view">
+      <section className="diary-editor-toolbar soft-panel">
+        <Button variant="ghost" type="button" onClick={backToList}>
+          <ArrowLeft size={16} />
+          返回列表
+        </Button>
+        <div className="diary-editor-heading">
+          <span>{activeEntryId ? "编辑日记" : "新建日记"}</span>
+          <strong>{draft.title || "未命名日记"}</strong>
+        </div>
+        <div className="diary-editor-actions">
+          <Button disabled={saveMutation.isPending} variant="primary" type="button" onClick={() => saveMutation.mutate()}>
+            <Save size={16} />
+            保存
+          </Button>
+          <Button disabled={!activeEntryId || deleteMutation.isPending} variant="danger" type="button" onClick={() => deleteMutation.mutate()}>
+            <Trash2 size={16} />
+            删除
+          </Button>
+        </div>
+      </section>
+
+      {detailError || mutationError ? (
+        <div className="inline-error">
+          <AlertCircle size={16} />
+          <span>{detailError || mutationError}</span>
+        </div>
+      ) : null}
+
+      <section className="diary-editor-layout">
+        <PaperPanel className="diary-writing-panel">
           <input
             className="diary-title-input"
             placeholder="标题"
             value={draft.title}
             onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
           />
-          <Button disabled={saveMutation.isPending} variant="primary" type="button" onClick={() => saveMutation.mutate()}>
-            <Save size={16} />
-            保存
-          </Button>
-        </div>
-        {detailError || mutationError ? (
-          <div className="inline-error">
-            <AlertCircle size={16} />
-            <span>{detailError || mutationError}</span>
+          <div className="diary-tab-row" role="tablist" aria-label="日记正文">
+            <button className={editorTab === "write" ? "active" : ""} type="button" onClick={() => setEditorTab("write")}>
+              写作
+            </button>
+            <button className={editorTab === "preview" ? "active" : ""} type="button" onClick={() => setEditorTab("preview")}>
+              预览
+            </button>
           </div>
-        ) : null}
-        <div className="diary-editor-grid">
-          <textarea
-            className="diary-textarea"
-            placeholder="写今天发生的事..."
-            value={draft.content_markdown}
-            onChange={(event) => setDraft((current) => ({ ...current, content_markdown: event.target.value }))}
-          />
-          <div className="markdown-preview markdown-selectable">
-            <ReactMarkdown>
-              {draft.content_markdown || "预览会出现在这里。"}
-            </ReactMarkdown>
-          </div>
-        </div>
-      </PaperPanel>
+          {editorTab === "write" ? (
+            <textarea
+              className="diary-textarea"
+              placeholder="写今天发生的事..."
+              value={draft.content_markdown}
+              onChange={(event) => setDraft((current) => ({ ...current, content_markdown: event.target.value }))}
+            />
+          ) : (
+            <div className="markdown-preview markdown-selectable">
+              <ReactMarkdown>
+                {draft.content_markdown || "预览会出现在这里。"}
+              </ReactMarkdown>
+            </div>
+          )}
+        </PaperPanel>
 
-      <aside className="diary-materials">
-        <div className="diary-materials-title">
-          <BookOpen className="text-[var(--green)]" size={20} />
-          <h2>素材栏</h2>
-        </div>
-        <div className="diary-meta-stack">
-          <TextField
-            label="日期"
-            type="date"
-            value={draft.entry_date}
-            onChange={(event) => setDraft((current) => ({ ...current, entry_date: event.target.value }))}
-          />
-          <div className="date-hint">
-            <CalendarDays size={15} />
-            <span>保存后可以上传图片，也可以让角色读这篇日记。</span>
+        <aside className="diary-info-panel soft-panel">
+          <div className="diary-materials-title">
+            <BookOpen className="text-[var(--green)]" size={20} />
+            <h2>日记信息</h2>
           </div>
-          <TextField
-            label="心情"
-            placeholder="例如：烦、累、还行"
-            value={draft.mood}
-            onChange={(event) => setDraft((current) => ({ ...current, mood: event.target.value }))}
-          />
-          <TextField label="标签" placeholder="逗号分隔" value={tagInput} onChange={(event) => setTagInput(event.target.value)} />
+          <div className="diary-meta-grid">
+            <TextField
+              label="日期"
+              type="date"
+              value={draft.entry_date}
+              onChange={(event) => setDraft((current) => ({ ...current, entry_date: event.target.value }))}
+            />
+            <TextField
+              label="心情"
+              placeholder="例如：烦、累、还行"
+              value={draft.mood}
+              onChange={(event) => setDraft((current) => ({ ...current, mood: event.target.value }))}
+            />
+            <TextField
+              className="diary-tags-input"
+              label="标签"
+              placeholder="逗号分隔"
+              value={tagInput}
+              onChange={(event) => setTagInput(event.target.value)}
+            />
+          </div>
           <div className="tag-preview-row">
             {parseTags(tagInput).map((tag) => (
               <span key={tag}>{tag}</span>
             ))}
           </div>
+          <div className="date-hint">
+            <CalendarDays size={15} />
+            <span>保存后可以上传图片，也可以让角色读这篇日记。</span>
+          </div>
           <Button variant="secondary" type="button" onClick={readWithCharacter}>
+            <MessageCircle size={16} />
             让角色读这篇日记
           </Button>
-          <Button disabled={!activeEntryId} variant="danger" type="button" onClick={() => deleteMutation.mutate()}>
-            <Trash2 size={16} />
-            删除日记
-          </Button>
+          {!activeEntryId ? (
+            <EmptyState title="还未保存" description="先保存日记，图片上传和角色阅读会使用保存后的日记。" />
+          ) : null}
           <DiaryImages
             attachments={detailQuery.data?.attachments || []}
             disabled={!activeEntryId}
             onUpload={(files) => uploadMutation.mutate(files)}
             onDelete={(imageId) => deleteImageMutation.mutate(imageId)}
           />
-        </div>
-      </aside>
+        </aside>
+      </section>
     </div>
   );
 }

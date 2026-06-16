@@ -298,10 +298,56 @@
 }
 
 /* Diary */
-.diary-workspace {
+.diary-page {
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(360px, 1fr) minmax(250px, 300px);
-  gap: clamp(14px, 1.6vw, 22px);
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.diary-list-view {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.diary-list-view:has(.diary-filter-panel) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.diary-editor-view {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.diary-list-toolbar,
+.diary-filter-panel,
+.diary-editor-toolbar,
+.diary-info-panel {
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.diary-list-toolbar,
+.diary-editor-toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.diary-list-actions {
+  display: grid;
+  min-width: min(620px, 100%);
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.diary-filter-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .diary-sidebar,
@@ -338,20 +384,24 @@
 
 .diary-note-list {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  align-content: start;
+  gap: 12px;
   min-width: 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 2px 4px 8px 2px;
 }
 
 .diary-note-card {
   display: grid;
-  gap: 8px;
+  grid-template-rows: auto minmax(40px, auto) auto;
+  gap: 10px;
   width: 100%;
   min-width: 0;
-  padding: 13px;
+  min-height: 156px;
+  padding: 15px;
   border: 1px solid rgba(103, 84, 54, 0.14);
   border-radius: 8px;
   background:
@@ -392,11 +442,17 @@
 
 .diary-note-card-head strong {
   min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
   font-size: 14px;
+  line-height: 1.4;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .diary-note-card-head span {
-  max-width: 54px;
+  max-width: 68px;
   flex: 0 0 auto;
   border-radius: 999px;
   background: rgba(89, 111, 132, 0.1);
@@ -427,6 +483,103 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
+}
+
+.diary-list-error {
+  min-width: 0;
+}
+
+.diary-editor-heading {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.diary-editor-heading span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diary-editor-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 20px;
+}
+
+.diary-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 8px;
+}
+
+.diary-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.diary-writing-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 14px;
+  padding: clamp(18px, 2vw, 28px);
+}
+
+.diary-tab-row {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  gap: 4px;
+  border: 1px solid rgba(61, 70, 58, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+  padding: 4px;
+}
+
+.diary-tab-row button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.diary-tab-row button.active {
+  background: rgba(95, 117, 91, 0.14);
+  color: var(--green);
+}
+
+.diary-info-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.diary-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   min-width: 0;
 }
 
@@ -471,6 +624,7 @@
 
 .diary-textarea,
 .markdown-preview {
+  width: 100%;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -483,6 +637,7 @@
 }
 
 .diary-textarea {
+  height: 100%;
   resize: none;
   padding: 16px;
   outline: none;
@@ -495,6 +650,12 @@
 
 .markdown-preview {
   padding: 16px;
+}
+
+.markdown-preview,
+.markdown-preview * {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .markdown-preview p {
@@ -522,6 +683,7 @@
 .diary-images {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .date-hint {
@@ -567,8 +729,9 @@
 
 .image-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
   gap: 10px;
+  min-width: 0;
 }
 
 .image-tile {
@@ -592,6 +755,7 @@
   justify-content: space-between;
   gap: 8px;
   margin-top: 6px;
+  min-width: 0;
 }
 
 .image-tile span {
@@ -608,6 +772,7 @@
   display: grid;
   grid-template-columns: minmax(210px, 250px) minmax(420px, 1fr) minmax(240px, 290px);
   gap: clamp(14px, 1.6vw, 22px);
+  overflow: hidden;
 }
 
 .schedule-plan-rail,
@@ -924,13 +1089,69 @@
 }
 
 @media (max-width: 1320px) {
-  .diary-workspace,
   .schedule-workspace {
     grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   }
 
-  .diary-materials,
   .schedule-detail-panel {
-    display: none;
+    grid-column: 1 / -1;
+    min-height: auto;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 1180px) {
+  .diary-editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .diary-info-panel {
+    overflow: visible;
+  }
+
+  .diary-filter-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .top-bar {
+    height: auto;
+    min-height: 72px;
+    align-items: start;
+    padding-block: 12px;
+  }
+
+  .diary-list-toolbar,
+  .diary-editor-toolbar,
+  .chat-hero,
+  .today-task-header,
+  .schedule-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .diary-list-actions {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .diary-filter-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .diary-editor-actions {
+    justify-content: start;
+  }
+
+  .schedule-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .schedule-main {
+    overflow: visible;
   }
 }

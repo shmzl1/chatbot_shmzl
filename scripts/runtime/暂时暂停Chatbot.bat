@@ -21,7 +21,7 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":9880" ^| findstr "LISTENING
 echo.
 echo 已暂时暂停。
 echo 本项目默认使用本地 SQLite 文件：backend\data\chatbot.db。
-echo 没有执行 Docker、没有删除数据库文件、没有删除上传文件。
+echo 没有执行容器命令、没有删除数据库文件、没有删除上传文件。
 echo 没有执行 wsl --shutdown。
 echo.
 pause

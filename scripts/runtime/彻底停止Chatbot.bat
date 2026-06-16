@@ -20,7 +20,7 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":9880" ^| findstr "LISTENING
 
 echo.
 echo 即将执行 wsl --shutdown。
-echo 注意：这会关闭所有 WSL，包括 Docker Desktop 后端和其他 WSL 终端。
+echo 注意：这会关闭所有 WSL 终端和 WSL 后台进程。
 echo 不删除本地 SQLite 数据库文件 backend\data\chatbot.db。
 echo 不删除上传文件 backend\data\uploads。
 echo.

@@ -16,11 +16,8 @@ chatbot/
       backups/
     database/
       sqlite_migrations/
-      legacy_postgres_migrations/
     main.py
     modules/
-    scripts/
-      migrate_postgres_to_sqlite.py
     services/
   frontend/
     desktop/
@@ -34,7 +31,6 @@ chatbot/
 默认配置：
 
 ```env
-DATABASE_BACKEND="sqlite"
 APP_DATA_DIR="./data"
 SQLITE_DB_PATH="./data/chatbot.db"
 UPLOAD_DIR="./data/uploads"
@@ -42,8 +38,6 @@ BACKUP_DIR="./data/backups"
 ```
 
 后端启动时会自动创建 `backend/data/`、`backend/data/chatbot.db`、`backend/data/uploads/` 和 `backend/data/backups/`，并执行 `backend/database/sqlite_migrations/` 中尚未执行的迁移。
-
-旧 PostgreSQL 迁移文件已移动到 `backend/database/legacy_postgres_migrations/`，只作为旧版本数据迁移参考，不参与默认启动。
 
 ## 环境变量
 
@@ -117,7 +111,7 @@ scripts\runtime\run_app.ps1
 scripts/runtime/run_app.bat
 ```
 
-脚本只检查 Conda 和后端依赖，然后启动 FastAPI。它不会启动 Docker，也不会启动 PostgreSQL/Adminer。
+脚本只检查 Conda 和后端依赖，然后启动 FastAPI。它不会检查 Docker，也不会启动数据库容器。
 
 ## 本地用户
 
@@ -179,55 +173,6 @@ POST /characters/{character_id}/persona-review/rollback
 
 记忆分为 pinned / always_read、普通 active、短期记忆。pinned 或 `read_policy=always` 每次 prompt 必读，不参与 topK；普通 active 记忆按相关性和重要度 topK 进入 prompt；过期、archived、superseded、deleted 或 `read_policy=never` 的记忆不会进入 prompt。
 
-## 旧 PostgreSQL 数据迁移
-
-一次性迁移脚本：
-
-```text
-backend/scripts/migrate_postgres_to_sqlite.py
-```
-
-迁移前请先备份旧 PostgreSQL，例如使用旧环境中的 `pg_dump`：
-
-```powershell
-pg_dump "postgresql://chatbot:change_me_local_only@127.0.0.1:5432/role_chatbot" -Fc -f E:\my_software\chatbot\backup-role-chatbot.dump
-```
-
-迁移命令：
-
-```powershell
-cd E:\my_software\chatbot\backend
-conda activate 3-chatbot
-python scripts\migrate_postgres_to_sqlite.py --postgres-url "postgresql://chatbot:change_me_local_only@127.0.0.1:5432/role_chatbot" --sqlite-path "data\chatbot.db"
-```
-
-迁移脚本不会删除或修改旧 PostgreSQL 数据。若目标 SQLite 已有数据，默认停止；确认后可加 `--overwrite`，脚本会先备份现有 SQLite 文件。
-
-迁移脚本需要可选依赖：
-
-```powershell
-python -m pip install "psycopg[binary]"
-```
-
-这个依赖只用于旧数据迁移，不是普通启动依赖。
-
-## 可选清理旧 Docker/PostgreSQL
-
-只有在确认 SQLite 迁移成功、旧聊天/日记/图片/记忆都能在桌面端看到之后，才可以手动清理旧 PostgreSQL 容器和卷。项目已删除默认 `deploy/docker/docker-compose.yml`，以下命令只适用于你仍保留旧版本 compose 文件的工作副本：
-
-```powershell
-cd E:\my_software\chatbot
-docker compose -f deploy\docker\docker-compose.yml down
-```
-
-删除旧数据卷有不可逆风险：
-
-```powershell
-docker compose -f deploy\docker\docker-compose.yml down -v
-```
-
-`down -v` 会删除 PostgreSQL 数据卷，执行后旧数据库数据不可恢复。
-
 ## 轻量检查
 
 ```powershell
@@ -246,5 +191,4 @@ npm run build
 - [架构说明](docs/ARCHITECTURE.md)
 - [Codex 协作指南](docs/CODEX_GUIDE.md)
 - [桌面端前端设计](docs/桌面端前端设计.md)
-- [旧 PostgreSQL 迁移说明](docs/旧PostgreSQL迁移.md)
 - [第三方开源声明](THIRD_PARTY_NOTICES.md)

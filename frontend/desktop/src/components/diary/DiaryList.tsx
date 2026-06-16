@@ -17,6 +17,10 @@ function compactDate(value: string): string {
   return value;
 }
 
+function titleFor(entry: DiaryEntryListItem): string {
+  return entry.title || "未命名日记";
+}
+
 export function DiaryList({ entries, activeEntryId, onSelect }: DiaryListProps) {
   if (!entries.length) {
     return <EmptyState icon={<BookOpen size={22} />} title="还没有日记" description="写一篇今天的记录吧。" />;
@@ -24,27 +28,33 @@ export function DiaryList({ entries, activeEntryId, onSelect }: DiaryListProps) 
 
   return (
     <div className="diary-note-list">
-      {entries.map((entry) => (
-        <button
-          className={`diary-note-card ${activeEntryId === entry.id ? "active" : ""}`}
-          key={entry.id}
-          type="button"
-          onClick={() => onSelect(entry.id)}
-        >
-          <div className="diary-note-card-head">
-            <strong>{entry.title || "未命名日记"}</strong>
-            <span title={entry.entry_date}>{compactDate(entry.entry_date)}</span>
-          </div>
-          <p>{entry.content_excerpt || "没有正文"}</p>
-          <div className="diary-note-card-tags">
-            {entry.mood ? <Tag>{entry.mood}</Tag> : null}
-            {(Array.isArray(entry.tags) ? entry.tags : []).slice(0, 2).map((tag) => (
-              <Tag key={tag}>{tag}</Tag>
-            ))}
-            {entry.image_count ? <Tag>{entry.image_count} 图</Tag> : null}
-          </div>
-        </button>
-      ))}
+      {entries.map((entry) => {
+        const tags = Array.isArray(entry.tags) ? entry.tags : [];
+        const visibleTags = tags.slice(0, 3);
+        const extraTags = tags.length - visibleTags.length;
+        return (
+          <button
+            className={`diary-note-card ${activeEntryId === entry.id ? "active" : ""}`}
+            key={entry.id}
+            type="button"
+            onClick={() => onSelect(entry.id)}
+          >
+            <div className="diary-note-card-head">
+              <strong title={titleFor(entry)}>{titleFor(entry)}</strong>
+              <span title={entry.entry_date}>{compactDate(entry.entry_date)}</span>
+            </div>
+            <p>{entry.content_excerpt || "没有正文"}</p>
+            <div className="diary-note-card-tags">
+              {entry.mood ? <Tag>{entry.mood}</Tag> : null}
+              {visibleTags.map((tag) => (
+                <Tag key={tag}>{tag}</Tag>
+              ))}
+              {extraTags > 0 ? <Tag>+{extraTags}</Tag> : null}
+              {entry.image_count ? <Tag>{entry.image_count} 图</Tag> : null}
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }

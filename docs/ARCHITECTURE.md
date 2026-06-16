@@ -31,7 +31,6 @@ backend/data/backups/
 配置项：
 
 ```env
-DATABASE_BACKEND="sqlite"
 APP_DATA_DIR="./data"
 SQLITE_DB_PATH="./data/chatbot.db"
 UPLOAD_DIR="./data/uploads"
@@ -51,14 +50,6 @@ SQLite migrations 位于：
 ```text
 backend/database/sqlite_migrations/
 ```
-
-旧 PostgreSQL migrations 位于：
-
-```text
-backend/database/legacy_postgres_migrations/
-```
-
-旧迁移文件只作为历史参考和旧数据迁移对照，不参与启动。
 
 ## 数据流
 
@@ -122,13 +113,3 @@ SQLite 中没有用户时自动创建默认用户；已有一个用户时复用�
 - 短期记忆：通过 `expires_at` 控制，过期后不进入 prompt。
 
 `archived`、`superseded`、`deleted`、`read_policy=never`、已过期或 `is_active=0` 的记忆不会进入 prompt。
-
-## 旧 PostgreSQL
-
-应用默认运行路径不再依赖 PostgreSQL。一次性迁移脚本是：
-
-```text
-backend/scripts/migrate_postgres_to_sqlite.py
-```
-
-迁移脚本可选依赖 `psycopg[binary]`，只在迁移旧数据时安装。普通运行依赖中不包含 psycopg。
