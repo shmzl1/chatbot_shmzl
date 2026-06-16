@@ -16,7 +16,6 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         )}
       >
         <p className="whitespace-pre-wrap text-sm">{message.content}</p>
-        {message.emotion ? <span className="mt-2 block text-xs font-black text-[var(--gold)]">{message.emotion}</span> : null}
       </div>
     </article>
   );

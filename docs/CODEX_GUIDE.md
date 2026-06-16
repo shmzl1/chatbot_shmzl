@@ -74,7 +74,15 @@ backend/database/sqlite_migrations/
 
 日记模块位于 `backend/modules/diary/`。日记正文和附件元数据保存在 SQLite，图片文件保存在 `backend/data/uploads/diary/images/`。
 
-聊天请求只有显式传入 `diary_entry_id` 时，才能通过 `modules.diary.context` 读取该篇日记。普通聊天不应读取全部日记。
+聊天请求只有显式传入 `diary_entry_id` 时，才能通过 `modules.diary.context` 读取该篇日记。普通聊天不应读取全部日记。从日记页点击“让角色读这篇日记”时，前端应开启新对话，避免把日记上下文混入无关历史会话。
+
+## 聊天会话
+
+正式会话接口位于 `/chat/sessions`，前端不要依赖 `/debug/sessions`。`/debug/sessions` 只保留给调试入口。
+
+新对话在用户发送第一条消息时才创建，不插入空会话。标题由第一条用户消息清理后截断生成，不调用 LLM。会话列表按当前本地用户过滤，支持搜索标题、用户消息和角色回复。
+
+归档会话只设置 `chat_sessions.is_archived=1` 和 `archived_at`，不删除 `chat_turns`。归档会话允许读取但不能继续发送，恢复后才能继续聊天。
 
 ## 日程
 

@@ -9,14 +9,15 @@ interface DiaryImagesProps {
   disabled?: boolean;
   onUpload: (files: FileList) => void;
   onDelete: (imageId: number) => void;
+  onDisabledUpload?: () => void;
 }
 
-export function DiaryImages({ attachments, disabled, onUpload, onDelete }: DiaryImagesProps) {
+export function DiaryImages({ attachments, disabled, onUpload, onDelete, onDisabledUpload }: DiaryImagesProps) {
   const safeAttachments = Array.isArray(attachments) ? attachments : [];
 
   return (
     <section className="diary-images">
-      <label className={`image-upload-button ${disabled ? "disabled" : ""}`}>
+      <label className={`image-upload-button ${disabled ? "disabled" : ""}`} onClick={() => disabled && onDisabledUpload?.()}>
         <ImagePlus size={17} />
         上传图片
         <input
@@ -48,7 +49,7 @@ export function DiaryImages({ attachments, disabled, onUpload, onDelete }: Diary
           ))}
         </div>
       ) : (
-        <EmptyState title="没有图片" description="保存日记后可以上传 png、jpg、jpeg、webp。" />
+        <EmptyState title="没有图片" />
       )}
     </section>
   );

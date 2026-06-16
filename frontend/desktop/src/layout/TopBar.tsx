@@ -25,10 +25,9 @@ export function TopBar() {
   return (
     <header className="top-bar">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--muted)]">Local Desktop</p>
-        <h1 className="mt-1 text-3xl font-black text-[var(--ink)]">{titles[activeView]}</h1>
+        <h1 className="text-3xl font-black text-[var(--ink)]">{titles[activeView]}</h1>
       </div>
-      <div className="service-status-pill" title={activeView === "settings" ? backendUrl : statusText}>
+      <div className="service-status-pill" title={statusText}>
         {online ? <Wifi className="text-[var(--green)]" size={18} /> : <WifiOff className="text-[var(--danger)]" size={18} />}
         <span>{statusText}</span>
       </div>

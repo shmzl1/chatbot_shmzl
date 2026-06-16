@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 class HealthResponse(BaseModel):
@@ -173,6 +173,10 @@ class VoiceTestResponse(BaseModel):
 class ChatSessionSummary(BaseModel):
     id: str
     character_id: str
+    user_id: Optional[int] = None
+    title: str = ""
+    is_archived: bool = False
+    archived_at: Optional[str] = None
     created_at: str
     updated_at: str
     turn_count: int = 0
@@ -182,6 +186,27 @@ class ChatSessionSummary(BaseModel):
 
 class ChatSessionListResponse(BaseModel):
     sessions: List[ChatSessionSummary]
+    total: int = 0
+    limit: int = 50
+    offset: int = 0
+
+
+class ChatSessionUpdateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=100)
+
+    class Config:
+        extra = "forbid"
+
+    @validator("title")
+    def clean_title(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("标题不能为空")
+        return cleaned
+
+
+class ChatSessionArchiveResponse(BaseModel):
+    session: ChatSessionSummary
 
 
 class ChatTurnRecord(BaseModel):

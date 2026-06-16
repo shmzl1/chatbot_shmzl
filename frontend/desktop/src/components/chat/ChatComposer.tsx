@@ -1,14 +1,16 @@
 import { Send } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "../ui/Button";
 
 interface ChatComposerProps {
   disabled?: boolean;
+  focusKey?: string;
   onSend: (message: string) => void;
   suggestedText?: string;
 }
 
-export function ChatComposer({ disabled, onSend, suggestedText }: ChatComposerProps) {
+export function ChatComposer({ disabled, focusKey, onSend, suggestedText }: ChatComposerProps) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [message, setMessage] = useState(suggestedText || "");
 
   useEffect(() => {
@@ -16,6 +18,12 @@ export function ChatComposer({ disabled, onSend, suggestedText }: ChatComposerPr
       setMessage(suggestedText);
     }
   }, [suggestedText]);
+
+  useEffect(() => {
+    if (!disabled) {
+      textareaRef.current?.focus();
+    }
+  }, [disabled, focusKey]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -30,8 +38,10 @@ export function ChatComposer({ disabled, onSend, suggestedText }: ChatComposerPr
   return (
     <form className="chat-composer" onSubmit={submit}>
       <textarea
+        ref={textareaRef}
         className="chat-composer-input"
         placeholder="说点什么..."
+        disabled={disabled}
         value={message}
         onChange={(event) => setMessage(event.target.value)}
       />

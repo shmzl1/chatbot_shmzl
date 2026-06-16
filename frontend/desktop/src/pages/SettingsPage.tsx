@@ -114,13 +114,6 @@ export function SettingsPage() {
             {healthQuery.data?.status === "ok" ? "后端连接正常。" : healthQuery.error instanceof Error ? healthQuery.error.message : "正在检查后端。"}
           </p>
         </StickyCard>
-        <StickyCard>
-          <h3 className="mb-3 text-lg font-black">高级设置</h3>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="ghost" type="button">角色管理</Button>
-            <Button variant="ghost" type="button">记忆管理</Button>
-          </div>
-        </StickyCard>
         <Dialog.Root>
           <Dialog.Trigger asChild>
             <Button variant="secondary">

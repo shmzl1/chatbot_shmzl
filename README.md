@@ -140,7 +140,14 @@ POST /auth/logout
 ```text
 POST /chat/text
 POST /chat
+GET  /chat/sessions
+GET  /chat/sessions/{session_id}/turns
+PATCH /chat/sessions/{session_id}
+POST /chat/sessions/{session_id}/archive
+POST /chat/sessions/{session_id}/unarchive
 ```
+
+聊天支持多个会话。新对话不会立即写入数据库，用户发送第一条消息时才创建会话；标题来自第一条用户消息，不调用 LLM。会话支持搜索、重命名、归档和恢复。归档不会删除消息，归档会话默认只读，恢复后才能继续发送。
 
 日记：
 

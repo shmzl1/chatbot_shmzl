@@ -67,11 +67,14 @@ frontend/desktop
 ```text
 frontend/desktop
   -> modules.chat.api
+  -> /chat/sessions for session list/search/archive
   -> modules.characters.service
   -> relationship_memory / long_term_memories / knowledge retrieval
   -> chat LLM profile
   -> database_service SQLite write
 ```
+
+聊天会话保存在 `chat_sessions` 和 `chat_turns`。`chat_sessions` 包含 `title`、`is_archived`、`archived_at` 和 `user_id`。新对话第一次发送时才创建真实会话，标题由第一条用户消息裁剪生成；归档只设置软状态，不删除 turn。正式前端只使用 `/chat/sessions`，`/debug/sessions` 仅用于调试。
 
 日记：
 

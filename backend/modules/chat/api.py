@@ -1,7 +1,18 @@
-from fastapi import APIRouter, Depends
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core.config import settings
-from core.schemas import ChatRequest, ChatTextRequest, ChatTextResponse, UserRecord
+from core.schemas import (
+    ChatRequest,
+    ChatSessionArchiveResponse,
+    ChatSessionListResponse,
+    ChatSessionUpdateRequest,
+    ChatTextRequest,
+    ChatTextResponse,
+    ChatTurnListResponse,
+    UserRecord,
+)
 from modules.characters.service import character_service
 from modules.diary.context import build_diary_context_for_chat
 from modules.relationship_memory.service import relationship_memory_service
@@ -18,6 +29,76 @@ from services.tts_service import tts_service
 
 
 router = APIRouter(tags=["chat"])
+
+
+@router.get("/chat/sessions", response_model=ChatSessionListResponse)
+def list_chat_sessions(
+    query: Optional[str] = None,
+    archived: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: UserRecord = Depends(get_current_user),
+) -> ChatSessionListResponse:
+    sessions, total = database_service.list_sessions(
+        user_id=current_user.id,
+        query=query,
+        archived=archived,
+        limit=limit,
+        offset=offset,
+    )
+    return ChatSessionListResponse(sessions=sessions, total=total, limit=limit, offset=offset)
+
+
+@router.get("/chat/sessions/{session_id}/turns", response_model=ChatTurnListResponse)
+def list_chat_turns(
+    session_id: str,
+    current_user: UserRecord = Depends(get_current_user),
+) -> ChatTurnListResponse:
+    return ChatTurnListResponse(
+        session_id=session_id,
+        turns=database_service.list_turns(session_id, user_id=current_user.id),
+    )
+
+
+@router.patch("/chat/sessions/{session_id}", response_model=ChatSessionArchiveResponse)
+def rename_chat_session(
+    session_id: str,
+    request: ChatSessionUpdateRequest,
+    current_user: UserRecord = Depends(get_current_user),
+) -> ChatSessionArchiveResponse:
+    return ChatSessionArchiveResponse(
+        session=database_service.rename_chat_session(
+            user_id=current_user.id,
+            session_id=session_id,
+            title=request.title,
+        )
+    )
+
+
+@router.post("/chat/sessions/{session_id}/archive", response_model=ChatSessionArchiveResponse)
+def archive_chat_session(
+    session_id: str,
+    current_user: UserRecord = Depends(get_current_user),
+) -> ChatSessionArchiveResponse:
+    return ChatSessionArchiveResponse(
+        session=database_service.archive_chat_session(
+            user_id=current_user.id,
+            session_id=session_id,
+        )
+    )
+
+
+@router.post("/chat/sessions/{session_id}/unarchive", response_model=ChatSessionArchiveResponse)
+def unarchive_chat_session(
+    session_id: str,
+    current_user: UserRecord = Depends(get_current_user),
+) -> ChatSessionArchiveResponse:
+    return ChatSessionArchiveResponse(
+        session=database_service.unarchive_chat_session(
+            user_id=current_user.id,
+            session_id=session_id,
+        )
+    )
 
 
 @router.post("/chat/text", response_model=ChatTextResponse)
@@ -38,6 +119,12 @@ def chat(
 
 def _run_chat(request: ChatTextRequest, voice: bool, current_user: UserRecord) -> ChatTextResponse:
     character = character_service.get_character(request.character_id)
+    if request.session_id:
+        session = database_service.get_chat_session(user_id=current_user.id, session_id=request.session_id)
+        if session.is_archived:
+            raise HTTPException(status_code=409, detail="该对话已归档，请先恢复后再继续聊天。")
+        if session.character_id != character.id:
+            raise HTTPException(status_code=409, detail="该对话属于其他角色，不能继续写入。")
     retrieval_context = retrieval_service.retrieve(character.id, request.message)
     retrieval_context["lore"].extend(
         database_service.retrieve_knowledge(
@@ -63,7 +150,7 @@ def _run_chat(request: ChatTextRequest, voice: bool, current_user: UserRecord) -
             limit=settings.top_k_reaction,
         )
     )
-    history = database_service.recent_history(request.session_id, limit=10)
+    history = database_service.recent_history(request.session_id, user_id=current_user.id, limit=10)
     memory_hits = database_service.retrieve_memories(
         character_id=character.id,
         query=request.message,
@@ -156,6 +243,7 @@ def _run_chat(request: ChatTextRequest, voice: bool, current_user: UserRecord) -
         debug["raw_text"] = generation.raw_text
 
     session_id, turn_id = database_service.save_chat_turn(
+        user_id=current_user.id,
         session_id=request.session_id,
         character_id=character.id,
         user_message=request.message,

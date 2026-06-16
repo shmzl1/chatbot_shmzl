@@ -26,12 +26,15 @@ class AuthService:
     def ensure_default_user(self) -> UserRecord:
         user = database_service.get_single_user()
         if user:
+            database_service.attach_orphan_chat_sessions_to_user(user.id)
             return user
-        return database_service.create_user(
+        created = database_service.create_user(
             username=DEFAULT_LOCAL_USERNAME,
             email=DEFAULT_LOCAL_EMAIL,
             password_hash=DEFAULT_LOCAL_PASSWORD_HASH,
         )
+        database_service.attach_orphan_chat_sessions_to_user(created.id)
+        return created
 
     def get_default_user(self) -> UserRecord:
         return self.ensure_default_user()

@@ -43,6 +43,7 @@ class DatabaseService:
     def save_chat_turn(
         self,
         *,
+        user_id: int,
         session_id: Optional[str],
         character_id: str,
         user_message: str,
@@ -53,20 +54,54 @@ class DatabaseService:
     ) -> tuple[str, int]:
         self._ensure_database()
         resolved_session_id = session_id or uuid.uuid4().hex
+        is_new_session = not session_id
         now = _now()
         candidates_json = [_model_to_dict(candidate) for candidate in candidates]
 
         with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO chat_sessions (id, character_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    character_id = excluded.character_id,
-                    updated_at = excluded.updated_at
-                """,
-                (resolved_session_id, character_id, now, now),
-            )
+            if is_new_session:
+                connection.execute(
+                    """
+                    INSERT INTO chat_sessions (
+                        id,
+                        character_id,
+                        user_id,
+                        title,
+                        is_archived,
+                        archived_at,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
+                    """,
+                    (
+                        resolved_session_id,
+                        character_id,
+                        user_id,
+                        self._chat_title_from_message(user_message),
+                        now,
+                        now,
+                    ),
+                )
+            else:
+                session = self._get_chat_session_row(
+                    connection,
+                    user_id=user_id,
+                    session_id=resolved_session_id,
+                )
+                if session["is_archived"]:
+                    raise HTTPException(status_code=409, detail="该对话已归档，请先恢复后再继续聊天。")
+                if str(session["character_id"]) != character_id:
+                    raise HTTPException(status_code=409, detail="该对话属于其他角色，不能继续写入。")
+                connection.execute(
+                    """
+                    UPDATE chat_sessions
+                    SET updated_at = ?
+                    WHERE id = ?
+                      AND user_id = ?
+                    """,
+                    (now, resolved_session_id, user_id),
+                )
             cursor = connection.execute(
                 """
                 INSERT INTO chat_turns (
@@ -96,15 +131,62 @@ class DatabaseService:
 
         return resolved_session_id, turn_id
 
-    def list_sessions(self, limit: int = 50) -> List[ChatSessionSummary]:
+    def list_sessions(
+        self,
+        *,
+        user_id: Optional[int] = None,
+        query: Optional[str] = None,
+        archived: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[List[ChatSessionSummary], int]:
         self._ensure_database()
-        safe_limit = max(1, min(limit, 200))
-        with self._connect() as connection:
-            rows = connection.execute(
+        safe_limit = max(1, min(limit, 100))
+        safe_offset = max(0, offset)
+        clauses = ["s.is_archived = ?", "EXISTS (SELECT 1 FROM chat_turns tx WHERE tx.session_id = s.id)"]
+        params: List[Any] = [1 if archived else 0]
+        if user_id is not None:
+            clauses.append("s.user_id = ?")
+            params.append(user_id)
+        cleaned_query = str(query or "").strip()
+        if cleaned_query:
+            like = f"%{cleaned_query}%"
+            clauses.append(
                 """
+                (
+                    LOWER(s.title) LIKE LOWER(?)
+                    OR EXISTS (
+                        SELECT 1
+                        FROM chat_turns tq
+                        WHERE tq.session_id = s.id
+                          AND (
+                            LOWER(tq.user_message) LIKE LOWER(?)
+                            OR LOWER(tq.reply) LIKE LOWER(?)
+                          )
+                    )
+                )
+                """
+            )
+            params.extend([like, like, like])
+        where = " AND ".join(clauses)
+        with self._connect() as connection:
+            count_row = connection.execute(
+                f"""
+                SELECT COUNT(*) AS count
+                FROM chat_sessions s
+                WHERE {where}
+                """,
+                tuple(params),
+            ).fetchone()
+            rows = connection.execute(
+                f"""
                 SELECT
                     s.id,
                     s.character_id,
+                    s.user_id,
+                    s.title,
+                    s.is_archived,
+                    s.archived_at,
                     s.created_at,
                     s.updated_at,
                     COUNT(t.id) AS turn_count,
@@ -123,30 +205,23 @@ class DatabaseService:
                         LIMIT 1
                     ) AS last_reply
                 FROM chat_sessions s
-                LEFT JOIN chat_turns t ON t.session_id = s.id
+                JOIN chat_turns t ON t.session_id = s.id
+                WHERE {where}
                 GROUP BY s.id
                 ORDER BY s.updated_at DESC
-                LIMIT ?
+                LIMIT ? OFFSET ?
                 """,
-                (safe_limit,),
+                tuple(params + [safe_limit, safe_offset]),
             ).fetchall()
 
-        return [
-            ChatSessionSummary(
-                id=row["id"],
-                character_id=row["character_id"],
-                created_at=self._as_text(row["created_at"]),
-                updated_at=self._as_text(row["updated_at"]),
-                turn_count=row["turn_count"],
-                last_user_message=row["last_user_message"],
-                last_reply=row["last_reply"],
-            )
-            for row in rows
-        ]
+        total = int(count_row["count"]) if count_row else 0
+        return [self._row_to_session(row) for row in rows], total
 
-    def list_turns(self, session_id: str) -> List[ChatTurnRecord]:
+    def list_turns(self, session_id: str, user_id: Optional[int] = None) -> List[ChatTurnRecord]:
         self._ensure_database()
         with self._connect() as connection:
+            if user_id is not None:
+                self._get_chat_session_row(connection, user_id=user_id, session_id=session_id)
             rows = connection.execute(
                 """
                 SELECT *
@@ -158,12 +233,20 @@ class DatabaseService:
             ).fetchall()
         return [self._row_to_turn(row) for row in rows]
 
-    def recent_history(self, session_id: Optional[str], limit: int = 10) -> List[Dict[str, str]]:
+    def recent_history(
+        self,
+        session_id: Optional[str],
+        *,
+        user_id: Optional[int] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, str]]:
         if not session_id:
             return []
         self._ensure_database()
         safe_limit = max(1, min(limit, 30))
         with self._connect() as connection:
+            if user_id is not None:
+                self._get_chat_session_row(connection, user_id=user_id, session_id=session_id)
             rows = connection.execute(
                 """
                 SELECT user_message, reply, emotion
@@ -178,6 +261,71 @@ class DatabaseService:
             {"user": row["user_message"], "assistant": row["reply"], "emotion": row["emotion"]}
             for row in reversed(rows)
         ]
+
+    def get_chat_session(self, *, user_id: int, session_id: str) -> ChatSessionSummary:
+        self._ensure_database()
+        with self._connect() as connection:
+            row = self._get_chat_session_summary_row(connection, user_id=user_id, session_id=session_id)
+        return self._row_to_session(row)
+
+    def rename_chat_session(self, *, user_id: int, session_id: str, title: str) -> ChatSessionSummary:
+        self._ensure_database()
+        cleaned_title = title.strip()
+        if not cleaned_title:
+            raise HTTPException(status_code=400, detail="标题不能为空")
+        if len(cleaned_title) > 100:
+            raise HTTPException(status_code=400, detail="标题长度不能超过 100")
+        with self._connect() as connection:
+            self._get_chat_session_row(connection, user_id=user_id, session_id=session_id)
+            connection.execute(
+                """
+                UPDATE chat_sessions
+                SET title = ?,
+                    updated_at = ?
+                WHERE id = ?
+                  AND user_id = ?
+                """,
+                (cleaned_title, _now(), session_id, user_id),
+            )
+            row = self._get_chat_session_summary_row(connection, user_id=user_id, session_id=session_id)
+        return self._row_to_session(row)
+
+    def archive_chat_session(self, *, user_id: int, session_id: str) -> ChatSessionSummary:
+        self._ensure_database()
+        now = _now()
+        with self._connect() as connection:
+            self._get_chat_session_row(connection, user_id=user_id, session_id=session_id)
+            connection.execute(
+                """
+                UPDATE chat_sessions
+                SET is_archived = 1,
+                    archived_at = COALESCE(archived_at, ?),
+                    updated_at = ?
+                WHERE id = ?
+                  AND user_id = ?
+                """,
+                (now, now, session_id, user_id),
+            )
+            row = self._get_chat_session_summary_row(connection, user_id=user_id, session_id=session_id)
+        return self._row_to_session(row)
+
+    def unarchive_chat_session(self, *, user_id: int, session_id: str) -> ChatSessionSummary:
+        self._ensure_database()
+        with self._connect() as connection:
+            self._get_chat_session_row(connection, user_id=user_id, session_id=session_id)
+            connection.execute(
+                """
+                UPDATE chat_sessions
+                SET is_archived = 0,
+                    archived_at = NULL,
+                    updated_at = ?
+                WHERE id = ?
+                  AND user_id = ?
+                """,
+                (_now(), session_id, user_id),
+            )
+            row = self._get_chat_session_summary_row(connection, user_id=user_id, session_id=session_id)
+        return self._row_to_session(row)
 
     def info(self) -> Dict[str, Any]:
         self._ensure_database()
@@ -346,6 +494,22 @@ class DatabaseService:
         if user is None:
             raise HTTPException(status_code=404, detail="用户不存在")
         return user
+
+    def attach_orphan_chat_sessions_to_user(self, user_id: int) -> int:
+        self._ensure_database()
+        with self._connect() as connection:
+            count_row = connection.execute("SELECT COUNT(*) AS count FROM users").fetchone()
+            if int(count_row["count"]) != 1:
+                return 0
+            cursor = connection.execute(
+                """
+                UPDATE chat_sessions
+                SET user_id = ?
+                WHERE user_id IS NULL
+                """,
+                (user_id,),
+            )
+        return int(cursor.rowcount or 0)
 
     def upsert_character_avatar(self, character_id: str, avatar_url: str) -> str:
         self._ensure_database()
@@ -1031,6 +1195,95 @@ class DatabaseService:
             debug=debug,
             created_at=self._as_text(row["created_at"]),
         )
+
+    def _row_to_session(self, raw_row: sqlite3.Row | Dict[str, Any]) -> ChatSessionSummary:
+        row = _row(raw_row)
+        return ChatSessionSummary(
+            id=str(row["id"]),
+            character_id=str(row["character_id"]),
+            user_id=int(row["user_id"]) if row.get("user_id") is not None else None,
+            title=str(row.get("title") or "未命名对话"),
+            is_archived=bool(row.get("is_archived", 0)),
+            archived_at=self._as_text(row["archived_at"]) if row.get("archived_at") else None,
+            created_at=self._as_text(row["created_at"]),
+            updated_at=self._as_text(row["updated_at"]),
+            turn_count=int(row.get("turn_count") or 0),
+            last_user_message=row.get("last_user_message"),
+            last_reply=row.get("last_reply"),
+        )
+
+    def _get_chat_session_row(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        user_id: int,
+        session_id: str,
+    ) -> sqlite3.Row:
+        row = connection.execute(
+            """
+            SELECT *
+            FROM chat_sessions
+            WHERE id = ?
+              AND user_id = ?
+            LIMIT 1
+            """,
+            (session_id, user_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="对话不存在")
+        return row
+
+    def _get_chat_session_summary_row(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        user_id: int,
+        session_id: str,
+    ) -> sqlite3.Row:
+        row = connection.execute(
+            """
+            SELECT
+                s.id,
+                s.character_id,
+                s.user_id,
+                s.title,
+                s.is_archived,
+                s.archived_at,
+                s.created_at,
+                s.updated_at,
+                COUNT(t.id) AS turn_count,
+                (
+                    SELECT user_message
+                    FROM chat_turns
+                    WHERE session_id = s.id
+                    ORDER BY id DESC
+                    LIMIT 1
+                ) AS last_user_message,
+                (
+                    SELECT reply
+                    FROM chat_turns
+                    WHERE session_id = s.id
+                    ORDER BY id DESC
+                    LIMIT 1
+                ) AS last_reply
+            FROM chat_sessions s
+            LEFT JOIN chat_turns t ON t.session_id = s.id
+            WHERE s.id = ?
+              AND s.user_id = ?
+            GROUP BY s.id
+            LIMIT 1
+            """,
+            (session_id, user_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="对话不存在")
+        return row
+
+    def _chat_title_from_message(self, message: str) -> str:
+        normalized = re.sub(r"\s+", " ", str(message or "").strip())
+        if not normalized:
+            return "未命名对话"
+        return normalized[:40]
 
     def _row_to_memory(self, raw_row: sqlite3.Row | Dict[str, Any]) -> MemoryRecord:
         row = _row(raw_row)

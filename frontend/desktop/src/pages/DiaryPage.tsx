@@ -4,7 +4,6 @@ import {
   AlertCircle,
   ArrowLeft,
   BookOpen,
-  CalendarDays,
   Filter,
   MessageCircle,
   Plus,
@@ -25,9 +24,9 @@ import { DiaryImages } from "../components/diary/DiaryImages";
 import { DiaryList } from "../components/diary/DiaryList";
 import { PaperPanel } from "../components/paper/PaperPanel";
 import { Button } from "../components/ui/Button";
-import { EmptyState } from "../components/ui/EmptyState";
 import { TextField } from "../components/ui/TextField";
 import { useAppStore } from "../stores/appStore";
+import { useChatStore } from "../stores/chatStore";
 import { useDiaryStore } from "../stores/diaryStore";
 import type { DiaryEntryPayload, DiaryFilters } from "../types/diary";
 
@@ -59,12 +58,14 @@ export function DiaryPage() {
   const setActiveView = useAppStore((state) => state.setActiveView);
   const setSelectedDiary = useAppStore((state) => state.setSelectedDiary);
   const setPendingChatDraft = useAppStore((state) => state.setPendingChatDraft);
+  const startNewConversation = useChatStore((state) => state.startNewConversation);
   const [mode, setMode] = useState<"list" | "editor">("list");
   const [editorTab, setEditorTab] = useState<"write" | "preview">("write");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<DiaryFilters>({});
   const [draft, setDraft] = useState<DiaryEntryPayload>(emptyDraft);
   const [tagInput, setTagInput] = useState("");
+  const [localNotice, setLocalNotice] = useState("");
 
   const listQuery = useQuery({
     queryKey: ["diary", "entries", filters],
@@ -103,6 +104,7 @@ export function DiaryPage() {
     mutationFn: () => (activeEntryId ? updateDiaryEntry(activeEntryId, payload) : createDiaryEntry(payload)),
     onSuccess: (entry) => {
       setActiveEntryId(entry.id);
+      setLocalNotice("");
       void queryClient.invalidateQueries({ queryKey: ["diary"] });
     },
   });
@@ -156,6 +158,7 @@ export function DiaryPage() {
     setActiveEntryId(null);
     setDraft(emptyDraft());
     setTagInput("");
+    setLocalNotice("");
     setEditorTab("write");
     setMode("editor");
   }
@@ -172,9 +175,10 @@ export function DiaryPage() {
 
   function readWithCharacter() {
     if (!activeEntryId) {
-      window.alert("请先保存日记。");
+      setLocalNotice("请先保存日记。");
       return;
     }
+    startNewConversation();
     setSelectedDiary({ id: activeEntryId, title: draft.title || "未命名日记" });
     setPendingChatDraft("你看看这篇日记，和我聊聊。");
     setActiveView("chat");
@@ -312,7 +316,7 @@ export function DiaryPage() {
           ) : (
             <div className="markdown-preview markdown-selectable">
               <ReactMarkdown>
-                {draft.content_markdown || "预览会出现在这里。"}
+                {draft.content_markdown || "暂无内容"}
               </ReactMarkdown>
             </div>
           )}
@@ -349,22 +353,17 @@ export function DiaryPage() {
               <span key={tag}>{tag}</span>
             ))}
           </div>
-          <div className="date-hint">
-            <CalendarDays size={15} />
-            <span>保存后可以上传图片，也可以让角色读这篇日记。</span>
-          </div>
           <Button variant="secondary" type="button" onClick={readWithCharacter}>
             <MessageCircle size={16} />
             让角色读这篇日记
           </Button>
-          {!activeEntryId ? (
-            <EmptyState title="还未保存" description="先保存日记，图片上传和角色阅读会使用保存后的日记。" />
-          ) : null}
+          {localNotice ? <div className="inline-error"><span>{localNotice}</span></div> : null}
           <DiaryImages
             attachments={detailQuery.data?.attachments || []}
             disabled={!activeEntryId}
             onUpload={(files) => uploadMutation.mutate(files)}
             onDelete={(imageId) => deleteImageMutation.mutate(imageId)}
+            onDisabledUpload={() => setLocalNotice("请先保存日记。")}
           />
         </aside>
       </section>

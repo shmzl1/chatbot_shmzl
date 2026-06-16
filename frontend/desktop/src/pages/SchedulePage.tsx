@@ -328,7 +328,7 @@ export function SchedulePage() {
               <EmptyState
                 icon={<CalendarDays size={24} />}
                 title="这一天还没有任务"
-                description="新建一个任务，它会进入本地 SQLite 日程库。"
+                description="新建一个任务开始安排。"
               />
               <Button variant="primary" type="button" onClick={openCreate}>
                 <Plus size={16} />

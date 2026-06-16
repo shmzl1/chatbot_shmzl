@@ -44,7 +44,8 @@ def list_sessions(
     limit: int = Query(default=50, ge=1, le=200),
     current_user: UserRecord = Depends(get_current_user),
 ) -> ChatSessionListResponse:
-    return ChatSessionListResponse(sessions=database_service.list_sessions(limit=limit))
+    sessions, total = database_service.list_sessions(user_id=current_user.id, limit=limit)
+    return ChatSessionListResponse(sessions=sessions, total=total, limit=limit, offset=0)
 
 
 @router.get("/sessions/{session_id}/turns", response_model=ChatTurnListResponse)
@@ -54,7 +55,7 @@ def list_turns(
 ) -> ChatTurnListResponse:
     return ChatTurnListResponse(
         session_id=session_id,
-        turns=database_service.list_turns(session_id),
+        turns=database_service.list_turns(session_id, user_id=current_user.id),
     )
 
 

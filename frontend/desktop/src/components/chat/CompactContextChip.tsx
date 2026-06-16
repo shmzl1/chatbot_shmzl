@@ -10,7 +10,7 @@ interface CompactContextChipProps {
 
 export function CompactContextChip({ selectedDiary, onClear }: CompactContextChipProps) {
   if (!selectedDiary) {
-    return <span className="context-mini-hint">普通聊天</span>;
+    return null;
   }
 
   return (
@@ -30,7 +30,7 @@ export function CompactContextChip({ selectedDiary, onClear }: CompactContextChi
         <Dialog.Content className="context-dialog">
           <Dialog.Title>日记详情</Dialog.Title>
           <Dialog.Description>
-            本轮聊天会携带这篇日记的内容：{selectedDiary.title || "未命名日记"}。
+            {selectedDiary.title || "未命名日记"}
           </Dialog.Description>
           <div className="context-dialog-actions">
             <Button variant="ghost" onClick={onClear}>

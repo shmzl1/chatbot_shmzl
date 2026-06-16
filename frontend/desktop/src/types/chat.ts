@@ -36,6 +36,10 @@ export interface ChatTextResponse {
 export interface ChatSessionSummary {
   id: string;
   character_id: string;
+  user_id?: number | null;
+  title: string;
+  is_archived: boolean;
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
   turn_count: number;
@@ -45,6 +49,24 @@ export interface ChatSessionSummary {
 
 export interface ChatSessionListResponse {
   sessions: ChatSessionSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ChatSessionUpdateRequest {
+  title: string;
+}
+
+export interface ChatSessionSearchParams {
+  query?: string;
+  archived?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ChatSessionArchiveResponse {
+  session: ChatSessionSummary;
 }
 
 export interface ChatTurnRecord {
