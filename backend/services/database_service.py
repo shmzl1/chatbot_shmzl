@@ -196,7 +196,7 @@ class DatabaseService:
 
         return {
             "database_backend": "sqlite",
-            "database_url": str(self.sqlite_path),
+            "database_path": str(self.sqlite_path),
             "session_count": int(session_row["count"]) if session_row else 0,
             "turn_count": int(turn_row["count"]) if turn_row else 0,
             "memory_count": int(memory_row["count"]) if memory_row else 0,
@@ -985,11 +985,6 @@ class DatabaseService:
     def _ensure_database(self) -> None:
         if self._initialized:
             return
-        if settings.database_backend != "sqlite":
-            raise HTTPException(
-                status_code=500,
-                detail="Only SQLite is supported in the default local desktop runtime.",
-            )
         try:
             self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
             settings.upload_dir.mkdir(parents=True, exist_ok=True)

@@ -11,7 +11,7 @@ load_dotenv(BASE_DIR / ".env")
 
 
 def _data_dir() -> Path:
-    configured = os.getenv("APP_DATA_DIR") or os.getenv("DATA_DIR")
+    configured = os.getenv("APP_DATA_DIR")
     if not configured:
         return BASE_DIR / "data"
 
@@ -84,7 +84,6 @@ class Settings:
     app_name: str = os.getenv("APP_NAME", "Virtual Character Companion System")
     app_version: str = os.getenv("APP_VERSION", "0.1.0")
     data_dir: Path = _data_dir()
-    database_backend: str = os.getenv("DATABASE_BACKEND", "sqlite").strip().lower() or "sqlite"
     sqlite_db_path: Path = _sqlite_db_path()
     outputs_dir: Path = _path_from_env("OUTPUTS_DIR", BASE_DIR / "outputs")
     upload_dir: Path = _path_from_env("UPLOAD_DIR", BASE_DIR / "data" / "uploads")

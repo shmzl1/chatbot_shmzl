@@ -1,8 +1,6 @@
-"""Legacy PostgreSQL migration module.
+"""Retired migration-service compatibility module.
 
-The default local desktop runtime uses SQLite via sqlite_migration_service.
-This module is intentionally kept free of psycopg imports so normal startup
-does not depend on PostgreSQL packages.
+Default startup runs SQLite migrations through sqlite_migration_service.
 """
 
 from fastapi import HTTPException
@@ -13,8 +11,8 @@ class MigrationService:
         raise HTTPException(
             status_code=500,
             detail=(
-                "PostgreSQL migrations are legacy-only. Use SQLite migrations "
-                "from backend/database/sqlite_migrations for default startup."
+                "This migration service is retired. Use SQLite migrations from "
+                "backend/database/sqlite_migrations for startup."
             ),
         )
 

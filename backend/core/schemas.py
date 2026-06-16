@@ -208,7 +208,7 @@ class DeleteResponse(BaseModel):
 
 class DatabaseInfoResponse(BaseModel):
     database_backend: str
-    database_url: str
+    database_path: str
     session_count: int
     turn_count: int
     memory_count: int = 0
