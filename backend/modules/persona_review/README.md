@@ -2,6 +2,25 @@
 
 `persona_review` 负责人设编辑闭环。
 
+## 桌面端闭环
+
+桌面端聊天页通过“人设修正”入口接入本模块，不创建另一套接口。用户先从当前会话选择真实聊天轮次，逐条保存到：
+
+```text
+POST /feedback/persona/turn
+```
+
+保存内容包括 `character_id`、`session_id`、`turn_id`、用户消息、角色回复、评分、问题标签和说明。随后前端调用：
+
+```text
+POST /characters/{character_id}/persona-review/chat
+POST /characters/{character_id}/persona-review/finalize
+POST /characters/{character_id}/persona-review/apply
+POST /characters/{character_id}/persona-review/rollback
+```
+
+人设编辑 AI 不是聊天角色本人，讨论不会写入普通聊天历史，不进入长期记忆或关系记忆。`finalize` 只生成 `preview_character_json` 和摘要；只有用户确认 apply 后才写入角色文件。`rollback` 只恢复最近一次备份。人设修正只影响后续回复，不改写历史聊天记录。
+
 ## LLM
 
 人设编辑只使用 `persona_editor` profile，只读取：

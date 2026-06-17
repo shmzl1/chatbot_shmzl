@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  UserRoundCog,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -26,12 +27,15 @@ import {
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { CompactContextChip } from "../components/chat/CompactContextChip";
 import { MessageBubble } from "../components/chat/MessageBubble";
+import { CharacterSelector } from "../components/character/CharacterSelector";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { TextField } from "../components/ui/TextField";
+import { PersonaReviewDialog } from "../components/persona/PersonaReviewDialog";
 import { useAppStore } from "../stores/appStore";
 import { useChatStore } from "../stores/chatStore";
 import type { ChatSessionSummary } from "../types/chat";
+import { turnToPersonaReviewTurn } from "../types/personaReview";
 
 function useDebouncedValue(value: string, delay = 260) {
   const [debounced, setDebounced] = useState(value);
@@ -95,6 +99,8 @@ export function ChatPage() {
   const setSelectedDiary = useAppStore((state) => state.setSelectedDiary);
   const pendingChatDraft = useAppStore((state) => state.pendingChatDraft);
   const setPendingChatDraft = useAppStore((state) => state.setPendingChatDraft);
+  const selectedCharacterId = useAppStore((state) => state.selectedCharacterId);
+  const setSelectedCharacterId = useAppStore((state) => state.setSelectedCharacterId);
   const activeSessionId = useChatStore((state) => state.activeSessionId);
   const conversationMode = useChatStore((state) => state.conversationMode);
   const sessionSidebarOpen = useChatStore((state) => state.sessionSidebarOpen);
@@ -113,6 +119,8 @@ export function ChatPage() {
   const [renameTarget, setRenameTarget] = useState<ChatSessionSummary | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [renameError, setRenameError] = useState("");
+  const [roleNotice, setRoleNotice] = useState("");
+  const [personaReviewOpen, setPersonaReviewOpen] = useState(false);
   const debouncedSearch = useDebouncedValue(sessionSearch);
 
   const charactersQuery = useQuery({ queryKey: ["characters"], queryFn: listCharacters, retry: 0 });
@@ -133,10 +141,14 @@ export function ChatPage() {
     enabled: Boolean(activeSessionId),
     retry: 0,
   });
-  const characterId = charactersQuery.data?.characters?.[0]?.id || "role01";
-  const characterName = charactersQuery.data?.characters?.[0]?.display_name || "role01";
+  const currentCharacter = charactersQuery.data?.characters.find((character) => character.id === selectedCharacterId) || null;
   const sessions = sessionsQuery.data?.sessions || [];
   const currentSession = sessions.find((session) => session.id === activeSessionId);
+  const reviewCharacterId = currentSession?.character_id || turnsQuery.data?.turns?.[0]?.character_id || null;
+  const reviewCharacter = charactersQuery.data?.characters.find((character) => character.id === reviewCharacterId) || null;
+  const characterName = reviewCharacter?.display_name || currentCharacter?.display_name || "选择角色";
+  const reviewTurns = (turnsQuery.data?.turns || []).map(turnToPersonaReviewTurn);
+  const canOpenPersonaReview = Boolean(activeSessionId && reviewCharacterId && reviewTurns.length && !turnsQuery.isLoading && !turnsQuery.error);
   const isArchivedView = conversationMode === "archived";
   const groupedSessions = useMemo(() => groupSessions(sessions), [sessions]);
 
@@ -177,8 +189,11 @@ export function ChatPage() {
     mutationFn: async (message: string) => {
       appendMessage({ id: crypto.randomUUID(), role: "user", content: message });
       setPendingChatDraft("");
+      if (!currentCharacter) {
+        throw new Error("请先选择角色。");
+      }
       return sendChatMessage({
-        character_id: characterId,
+        character_id: currentCharacter.id,
         message,
         session_id: conversationMode === "existing" ? activeSessionId : null,
         diary_entry_id: selectedDiary?.id ?? null,
@@ -239,12 +254,24 @@ export function ChatPage() {
   });
 
   function newConversation() {
+    setPersonaReviewOpen(false);
     startNewConversation();
     setSelectedDiary(null);
   }
 
   function chooseSession(session: ChatSessionSummary) {
+    setPersonaReviewOpen(false);
+    setSelectedCharacterId(session.character_id);
     selectSession(session.id, session.is_archived ? "archived" : "existing");
+  }
+
+  function handleCharacterChange() {
+    setPersonaReviewOpen(false);
+    if (activeSessionId && conversationMode !== "new") {
+      startNewConversation();
+      setSelectedDiary(null);
+      setRoleNotice("已切换角色，将开始新的对话。");
+    }
   }
 
   function openRename(session: ChatSessionSummary) {
@@ -262,6 +289,14 @@ export function ChatPage() {
 
   const actionError = errorMessage(archiveMutation.error) || errorMessage(unarchiveMutation.error);
   const chatTitle = currentSession?.title || (conversationMode === "new" ? "新对话" : "对话");
+
+  useEffect(() => {
+    if (!roleNotice) {
+      return;
+    }
+    const timer = window.setTimeout(() => setRoleNotice(""), 2400);
+    return () => window.clearTimeout(timer);
+  }, [roleNotice]);
 
   return (
     <div className="chat-workspace chat-with-sidebar">
@@ -361,6 +396,17 @@ export function ChatPage() {
             </div>
           </div>
           <div className="chat-context-actions">
+            <CharacterSelector onCharacterChange={handleCharacterChange} />
+            <Button
+              variant="secondary"
+              type="button"
+              disabled={!canOpenPersonaReview}
+              title={canOpenPersonaReview ? "打开人设修正工作台" : "当前对话还没有可修正的角色回复"}
+              onClick={() => setPersonaReviewOpen(true)}
+            >
+              <UserRoundCog size={16} />
+              人设修正
+            </Button>
             <CompactContextChip selectedDiary={selectedDiary} onClear={() => setSelectedDiary(null)} />
             {isArchivedView ? (
               <Button variant="secondary" type="button" onClick={() => activeSessionId && unarchiveMutation.mutate(activeSessionId)}>
@@ -377,6 +423,7 @@ export function ChatPage() {
             <span>已归档</span>
           </div>
         ) : null}
+        {roleNotice ? <div className="chat-role-notice">{roleNotice}</div> : null}
 
         <section className="chat-stream paper-sheet">
           {turnsQuery.error instanceof Error ? (
@@ -402,13 +449,13 @@ export function ChatPage() {
             <EmptyState
               icon={selectedDiary ? <BookOpen size={24} /> : <MessageCircle size={24} />}
               title="开始新的对话"
-              description={selectedDiary ? `日记：《${selectedDiary.title || "未命名日记"}》` : "随便说点什么。"}
+              description={selectedDiary ? `日记：《${selectedDiary.title || "未命名日记"}》` : currentCharacter ? "随便说点什么。" : "请先选择角色。"}
             />
           )}
         </section>
 
         <ChatComposer
-          disabled={sendMutation.isPending || charactersQuery.isLoading || isArchivedView}
+          disabled={sendMutation.isPending || charactersQuery.isLoading || Boolean(charactersQuery.error) || !currentCharacter || isArchivedView}
           suggestedText={pendingChatDraft}
           focusKey={`${conversationMode}-${activeSessionId || "new"}-${pendingChatDraft}`}
           onSend={(message) => sendMutation.mutate(message)}
@@ -436,6 +483,17 @@ export function ChatPage() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+      <PersonaReviewDialog
+        open={personaReviewOpen}
+        onOpenChange={setPersonaReviewOpen}
+        characterId={reviewCharacterId}
+        characterName={reviewCharacter?.display_name || reviewCharacterId || "未选择角色"}
+        sessionId={activeSessionId}
+        turns={reviewTurns}
+        onPersonaChanged={() => {
+          void queryClient.invalidateQueries({ queryKey: ["characters"] });
+        }}
+      />
     </div>
   );
 }

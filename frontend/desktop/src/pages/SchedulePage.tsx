@@ -7,7 +7,9 @@ import {
   Edit3,
   FastForward,
   Plus,
+  SlidersHorizontal,
   Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
@@ -24,6 +26,7 @@ import {
 } from "../api/scheduleApi";
 import { MonthCalendar } from "../components/schedule/CalendarSkeleton";
 import { ScheduleTaskForm } from "../components/schedule/ScheduleTaskForm";
+import { CharacterSelector } from "../components/character/CharacterSelector";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { TextField } from "../components/ui/TextField";
@@ -33,7 +36,7 @@ import { schedulePriorityLabels, scheduleStatusLabels, scheduleTypeLabels } from
 import { formatMonthKey, formatReadableDate, isToday, parseLocalDate } from "../utils/date";
 
 const typeOptions: Array<{ value: ScheduleItemType | ""; label: string }> = [
-  { value: "", label: "全部" },
+  { value: "", label: "全部类型" },
   { value: "study_point", label: "学习" },
   { value: "task", label: "事项" },
   { value: "review_point", label: "复习" },
@@ -78,6 +81,7 @@ export function SchedulePage() {
   const [postponeDate, setPostponeDate] = useState(selectedDate);
   const [postponeTime, setPostponeTime] = useState("");
   const [postponeError, setPostponeError] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const dayQuery = useQuery({
     queryKey: ["schedule", "day", selectedDate, itemTypeFilter, statusFilter],
@@ -167,6 +171,9 @@ export function SchedulePage() {
   const completionRate = day?.completion_rate || 0;
   const progressStyle = { "--schedule-progress": `${Math.round(completionRate * 360)}deg` } as CSSProperties;
   const title = isToday(selectedDate) ? "今日任务" : `${formatReadableDate(selectedDate)}任务`;
+  const typeLabel = typeOptions.find((option) => option.value === itemTypeFilter)?.label || "";
+  const statusLabel = statusOptions.find((option) => option.value === statusFilter)?.label || "";
+  const activeFilterCount = (itemTypeFilter ? 1 : 0) + (statusFilter ? 1 : 0);
   const detailError = mutationError(detailQuery.error);
   const actionError =
     mutationError(createMutation.error) ||
@@ -206,47 +213,13 @@ export function SchedulePage() {
     }
   }
 
+  function resetFilters() {
+    setItemTypeFilter("");
+    setStatusFilter("");
+  }
+
   return (
     <div className="schedule-workspace">
-      <aside className="schedule-plan-rail">
-        <div className="page-kicker">
-          <span>Filters</span>
-          <strong>分类</strong>
-        </div>
-        <div className="schedule-filter-stack">
-          {typeOptions.map((option) => {
-            const count = option.value ? (day?.type_counts[option.value] || 0) : total;
-            return (
-              <button
-                className={itemTypeFilter === option.value ? "active" : ""}
-                type="button"
-                key={option.label}
-                onClick={() => setItemTypeFilter(option.value)}
-              >
-                <span>{option.label}</span>
-                <em>{count}</em>
-              </button>
-            );
-          })}
-        </div>
-        <div className="schedule-filter-stack">
-          {statusOptions.map((option) => {
-            const count = option.value ? (day?.status_counts[option.value] || 0) : total;
-            return (
-              <button
-                className={statusFilter === option.value ? "active" : ""}
-                type="button"
-                key={option.label}
-                onClick={() => setStatusFilter(option.value)}
-              >
-                <span>{option.label}</span>
-                <em>{count}</em>
-              </button>
-            );
-          })}
-        </div>
-      </aside>
-
       <section className="schedule-main">
         <div className="schedule-hero">
           <div>
@@ -254,9 +227,78 @@ export function SchedulePage() {
             <h2>{title}</h2>
             <p>{selectedDate} · 完成 {done} / {total} · 待处理 {pending}</p>
           </div>
-          <div className="schedule-progress-ring" style={progressStyle}>
-            <strong>{Math.round(completionRate * 100)}%</strong>
-            <span>完成率</span>
+          <div className="schedule-hero-actions">
+            <CharacterSelector />
+            <div className="schedule-filter-inline">
+              <Dialog.Root open={filterOpen} onOpenChange={setFilterOpen}>
+                <Dialog.Trigger asChild>
+                  <Button variant="secondary" type="button">
+                    <SlidersHorizontal size={16} />
+                    筛选{activeFilterCount ? ` ${activeFilterCount}` : ""}
+                  </Button>
+                </Dialog.Trigger>
+                <Dialog.Portal>
+                  <Dialog.Overlay className="fixed inset-0 z-30 bg-black/10" />
+                  <Dialog.Content className="schedule-filter-dialog">
+                    <Dialog.Title className="text-lg font-black">筛选</Dialog.Title>
+                    <div className="schedule-filter-panel">
+                      <section>
+                        <h3>任务类型</h3>
+                        <div className="schedule-filter-options">
+                          {typeOptions.map((option) => (
+                            <button
+                              className={itemTypeFilter === option.value ? "active" : ""}
+                              type="button"
+                              key={option.label}
+                              onClick={() => setItemTypeFilter(option.value)}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                      <section>
+                        <h3>任务状态</h3>
+                        <div className="schedule-filter-options">
+                          {statusOptions.map((option) => (
+                            <button
+                              className={statusFilter === option.value ? "active" : ""}
+                              type="button"
+                              key={option.label}
+                              onClick={() => setStatusFilter(option.value)}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+                    <div className="schedule-form-actions">
+                      <Button variant="ghost" type="button" onClick={resetFilters}>重置</Button>
+                      <Dialog.Close asChild>
+                        <Button variant="primary" type="button">完成</Button>
+                      </Dialog.Close>
+                    </div>
+                  </Dialog.Content>
+                </Dialog.Portal>
+              </Dialog.Root>
+              {itemTypeFilter ? (
+                <button className="schedule-filter-chip" type="button" onClick={() => setItemTypeFilter("")}>
+                  {typeLabel}
+                  <X size={13} />
+                </button>
+              ) : null}
+              {statusFilter ? (
+                <button className="schedule-filter-chip" type="button" onClick={() => setStatusFilter("")}>
+                  {statusLabel}
+                  <X size={13} />
+                </button>
+              ) : null}
+            </div>
+            <div className="schedule-progress-ring" style={progressStyle}>
+              <strong>{Math.round(completionRate * 100)}%</strong>
+              <span>完成率</span>
+            </div>
           </div>
         </div>
 
@@ -358,14 +400,6 @@ export function SchedulePage() {
           <span>Task</span>
           <strong>任务详情</strong>
         </div>
-        <div className="status-pill-grid">
-          {statusOptions.slice(1).map((option) => (
-            <div className="status-pill" key={option.value}>
-              <span>{option.label}</span>
-              <strong>{option.value ? day?.status_counts[option.value] || 0 : 0}</strong>
-            </div>
-          ))}
-        </div>
 
         {editorMode === "create" ? (
           <ScheduleTaskForm
@@ -439,7 +473,7 @@ export function SchedulePage() {
           <div className="schedule-empty-block">
             <EmptyState
               title="未选择任务"
-              description="选择左侧日期中的任务，或新建一个任务。"
+              description="选择任务列表中的任务，或新建一个任务。"
             />
             <Button variant="primary" type="button" onClick={openCreate}>
               <Plus size={16} />

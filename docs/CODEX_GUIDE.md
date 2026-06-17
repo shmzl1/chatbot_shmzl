@@ -84,6 +84,10 @@ backend/database/sqlite_migrations/
 
 归档会话只设置 `chat_sessions.is_archived=1` 和 `archived_at`，不删除 `chat_turns`。归档会话允许读取但不能继续发送，恢复后才能继续聊天。
 
+聊天、日记和日程共享当前角色选择。前端只保存当前角色 ID 到 localStorage，不能写硬编码角色列表，不能在聊天发送逻辑里静默回退到 `role01` 或列表第一项。打开历史会话时必须按该会话 `character_id` 同步当前角色；在已有会话中切换角色时必须开启新对话。
+
+日记页“让角色读这篇日记”使用当前选中角色并开启新对话。日程数据不按角色隔离，也不应因为当前角色变化而过滤、复制或改写任务。
+
 ## 日程
 
 日程模块位于 `backend/modules/schedule/`。第一阶段 MVP 使用 `schedule_items`、`schedule_occurrences`、`schedule_completion_logs` 三张 SQLite 表，不创建 `schedule_plans`。
@@ -91,6 +95,12 @@ backend/database/sqlite_migrations/
 日程接口由 `backend/main.py` 注册到 `/schedule`。前端 `frontend/desktop/src/pages/SchedulePage.tsx` 通过 `scheduleApi.ts` 调用真实 FastAPI 接口，不使用 mock、fallback 或 localStorage 保存任务。
 
 第一阶段只支持任务 CRUD、选中日期任务、月历汇总、完成、跳过和延期。延期必须保留旧 occurrence 并创建新 occurrence。计划、自动复习、AI 排程、系统通知和聊天集成属于后续阶段。普通聊天不应自动读取日程。
+
+日程筛选默认收起在“筛选”入口中。不要重新加入常驻左侧筛选栏，也不要把全部类型、全部状态和完整状态统计重复铺在主界面上。
+
+## 桌面端服务状态
+
+后端连接正常时，桌面端不显示“服务正常”类常驻状态。只有连接失败时显示简短错误提示，并提供重试和进入设置的按钮。提示不展示 URL、IP 或端口，也不要使用浏览器 alert。
 
 ## relationship_memory
 
@@ -103,3 +113,9 @@ backend/database/sqlite_migrations/
 `finalize` 使用 patch 模式：模型只输出 patch JSON，后端合并 patch，生成 `preview_character_json`，校验通过后返回。`apply` 必须由用户确认后才写入。
 
 固定核心人设不可被 AI 自动修改、删除、覆盖或压缩；可变补充人设可以在用户确认 apply 后压缩并归档。
+
+桌面端聊天页的人设修正入口必须使用当前会话自己的 `character_id` 和正式 turns 数据。不能用全局角色选择器误改其他角色，不能固定 `role01`，不能用角色列表第一项作为静默兜底。
+
+人设修正前端流程必须先保存逐轮反馈到 `/feedback/persona/turn`，再调用 persona-review chat 与人设编辑 AI 讨论。人设编辑 AI 不是聊天角色本人；讨论记录不能写入普通聊天会话、长期记忆或关系记忆。
+
+`finalize` 只生成预览和字段差异，不写角色文件。`apply` 必须经过用户确认，确认文案要说明只影响后续回复、历史聊天不会改变。`rollback` 只恢复最近一次备份，不能声称可恢复任意历史版本。受保护字段如 `id`、`display_name`、`avatar_url`、`voice`、`gptsovits_base_url`、`ref_audio_path`、`prompt_text` 不提供编辑入口，前端发现预览中这些字段变化时应阻止应用，后端校验仍是最终防线。

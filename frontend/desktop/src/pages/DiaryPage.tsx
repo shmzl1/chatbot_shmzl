@@ -22,6 +22,7 @@ import {
 } from "../api/diaryApi";
 import { DiaryImages } from "../components/diary/DiaryImages";
 import { DiaryList } from "../components/diary/DiaryList";
+import { CharacterSelector } from "../components/character/CharacterSelector";
 import { PaperPanel } from "../components/paper/PaperPanel";
 import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/TextField";
@@ -58,6 +59,7 @@ export function DiaryPage() {
   const setActiveView = useAppStore((state) => state.setActiveView);
   const setSelectedDiary = useAppStore((state) => state.setSelectedDiary);
   const setPendingChatDraft = useAppStore((state) => state.setPendingChatDraft);
+  const selectedCharacterId = useAppStore((state) => state.selectedCharacterId);
   const startNewConversation = useChatStore((state) => state.startNewConversation);
   const [mode, setMode] = useState<"list" | "editor">("list");
   const [editorTab, setEditorTab] = useState<"write" | "preview">("write");
@@ -178,6 +180,10 @@ export function DiaryPage() {
       setLocalNotice("请先保存日记。");
       return;
     }
+    if (!selectedCharacterId) {
+      setLocalNotice("请先选择角色。");
+      return;
+    }
     startNewConversation();
     setSelectedDiary({ id: activeEntryId, title: draft.title || "未命名日记" });
     setPendingChatDraft("你看看这篇日记，和我聊聊。");
@@ -193,6 +199,7 @@ export function DiaryPage() {
             <strong>日记</strong>
           </div>
           <div className="diary-list-actions">
+            <CharacterSelector />
             <TextField
               aria-label="搜索日记"
               placeholder="搜索标题或正文"
@@ -272,6 +279,7 @@ export function DiaryPage() {
           <strong>{draft.title || "未命名日记"}</strong>
         </div>
         <div className="diary-editor-actions">
+          <CharacterSelector />
           <Button disabled={saveMutation.isPending} variant="primary" type="button" onClick={() => saveMutation.mutate()}>
             <Save size={16} />
             保存

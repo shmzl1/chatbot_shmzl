@@ -76,6 +76,8 @@ frontend/desktop
 
 聊天会话保存在 `chat_sessions` 和 `chat_turns`。`chat_sessions` 包含 `title`、`is_archived`、`archived_at` 和 `user_id`。新对话第一次发送时才创建真实会话，标题由第一条用户消息裁剪生成；归档只设置软状态，不删除 turn。正式前端只使用 `/chat/sessions`，`/debug/sessions` 仅用于调试。
 
+桌面端维护一个共享的当前角色 ID，只持久化到 localStorage。角色实体和角色列表始终来自后端 characters 模块。聊天发送使用当前角色 ID；打开历史会话时以前端会话的 `character_id` 为准同步当前角色。用户在已有会话中切换角色时，前端开启新对话，避免同一会话混入不同角色。
+
 日记：
 
 ```text
@@ -97,10 +99,13 @@ frontend/desktop schedule page
 
 日程第一阶段提供任务 CRUD、选中日期任务、月历汇总、完成、跳过和延期。延期不会覆盖历史 occurrence，而是把旧 occurrence 标记为 `postponed`，再创建新的 `pending` occurrence。计划、自动复习、AI 排程、通知和聊天集成属于后续阶段；日程默认不进入聊天 prompt。
 
+日程数据不绑定角色，也不按角色隔离。桌面端日程页仍显示共享角色选择器，目的是保持全局上下文一致，而不是过滤或改写日程数据。日程筛选 UI 默认收起在“筛选”入口中，避免把全部类型和全部状态长期铺在页面左侧。
+
 人设编辑：
 
 ```text
 frontend/desktop
+  -> /feedback/persona/turn for selected chat-turn feedback
   -> characters persona-review endpoints
   -> persona_editor LLM profile
   -> patch
@@ -108,6 +113,8 @@ frontend/desktop
   -> user confirmed apply
   -> character.json write and optional compaction archive
 ```
+
+桌面端人设修正工作台从正式 `/chat/sessions/{session_id}/turns` 读取真实轮次。每条反馈保存 `character_id`、`session_id`、`turn_id`、用户消息、角色回复、标签和说明；随后的人设编辑讨论使用 `PERSONA_EDITOR_*` 配置，不创建 `chat_sessions`，不写入 `chat_turns`，不进入长期记忆或关系记忆。`finalize` 只返回预览；`apply` 必须由用户确认后执行并自动备份；`rollback` 只恢复最近一次备份。历史聊天记录不会被改写。
 
 ## 本地用户策略
 

@@ -98,6 +98,8 @@ npm run dev
 
 桌面端默认连接 `http://127.0.0.1:8000`。前端不直接读取 SQLite 文件，只调用 FastAPI。
 
+桌面端顶部不显示“服务正常”类常驻状态。只有后端连接失败时才显示简短提示，并提供重试和设置入口；提示不展示 URL、IP 或端口。
+
 ## 一键启动脚本
 
 ```powershell
@@ -149,6 +151,8 @@ POST /chat/sessions/{session_id}/unarchive
 
 聊天支持多个会话。新对话不会立即写入数据库，用户发送第一条消息时才创建会话；标题来自第一条用户消息，不调用 LLM。会话支持搜索、重命名、归档和恢复。归档不会删除消息，归档会话默认只读，恢复后才能继续发送。
 
+聊天、日记和日程共用当前角色选择。前端只在 localStorage 保存已选角色 ID，真实角色列表始终来自后端 `/characters`。聊天发送时必须使用当前选中角色；历史会话按自身 `character_id` 同步角色。用户在已有会话中切换角色时，前端会开启新对话，避免把不同角色混入同一历史会话。日记页“让角色读这篇日记”也使用当前选中角色并开启新对话。日程数据不按角色隔离，角色选择只用于保持全局上下文一致。
+
 日记：
 
 ```text
@@ -178,14 +182,20 @@ POST   /schedule/occurrences/{occurrence_id}/postpone
 
 日程第一阶段 MVP 使用 `schedule_items`、`schedule_occurrences`、`schedule_completion_logs` 三张 SQLite 表。延期会把旧 occurrence 标记为 `postponed`，再创建新的 `pending` occurrence；计划、自动复习、AI 排程、系统通知和聊天集成属于后续阶段。日程默认不进入聊天 prompt。
 
+桌面端日程筛选默认收起在“筛选”入口中，不常驻展示全部类型和全部状态；页面主体只显示当前有效筛选摘要、今日任务、月历和任务详情。
+
 人设编辑：
 
 ```text
+POST /feedback/persona/turn
+GET  /feedback/persona/{character_id}
 POST /characters/{character_id}/persona-review/chat
 POST /characters/{character_id}/persona-review/finalize
 POST /characters/{character_id}/persona-review/apply
 POST /characters/{character_id}/persona-review/rollback
 ```
+
+桌面端聊天页提供“人设修正”入口。用户从当前会话选择真实聊天轮次，保存逐轮 persona feedback，再与人设编辑 AI 讨论修改方向。人设编辑 AI 使用独立 `PERSONA_EDITOR_*` 配置，不写入普通聊天历史、不进入长期记忆或关系记忆。`finalize` 只生成预览和字段差异；只有用户确认“确认应用修改”后才调用 `apply` 写入角色人设。`rollback` 只恢复该角色最近一次已应用修改的备份。人设修正只影响后续回复，不改写历史聊天记录。
 
 ## 人设和记忆
 
