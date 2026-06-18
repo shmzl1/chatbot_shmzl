@@ -5,8 +5,6 @@ from pydantic import BaseModel, Field, validator
 
 class HealthResponse(BaseModel):
     status: str
-    gptsovits: bool
-    qdrant: bool
     database: bool = False
     database_backend: str = "sqlite"
 

@@ -19,6 +19,7 @@ node_modules/
 dist/
 build/
 frontend/**/dist/
+frontend/**/dist-electron/
 frontend/**/build/
 
 # Logs and runtime output

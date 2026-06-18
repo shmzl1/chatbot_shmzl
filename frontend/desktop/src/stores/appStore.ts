@@ -3,6 +3,7 @@ import { getBackendUrl, setBackendUrl } from "../api/client";
 
 export type AppView = "chat" | "diary" | "schedule" | "settings";
 const SELECTED_CHARACTER_STORAGE_KEY = "chatbot.selectedCharacterId";
+export const DEFAULT_CHARACTER_ID = "role01";
 
 export interface SelectedDiaryContext {
   id: number;

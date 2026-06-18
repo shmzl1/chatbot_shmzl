@@ -4,7 +4,7 @@ import { Check, ChevronDown, RotateCcw } from "lucide-react";
 import { useEffect } from "react";
 import { listCharacters } from "../../api/chatApi";
 import { resolveAssetUrl } from "../../api/client";
-import { useAppStore } from "../../stores/appStore";
+import { DEFAULT_CHARACTER_ID, useAppStore } from "../../stores/appStore";
 import type { CharacterSummary } from "../../types/chat";
 
 interface CharacterSelectorProps {
@@ -35,22 +35,24 @@ export function CharacterSelector({ disabled, onCharacterChange }: CharacterSele
   const charactersQuery = useQuery({ queryKey: ["characters"], queryFn: listCharacters, retry: 0 });
   const characters = charactersQuery.data?.characters || [];
   const selected = characters.find((character) => character.id === selectedCharacterId) || null;
+  const defaultCharacter = characters.find((character) => character.id === DEFAULT_CHARACTER_ID) || null;
+  const hasInvalidSavedCharacter = Boolean(selectedCharacterId && !selected);
 
   useEffect(() => {
     if (!charactersQuery.data) {
       return;
     }
-    if (!characters.length) {
-      if (selectedCharacterId) {
-        setSelectedCharacterId(null);
-      }
+    if (selected) {
       return;
     }
-    if (!selectedCharacterId || !characters.some((character) => character.id === selectedCharacterId)) {
-      const [firstCharacter] = characters;
-      setSelectedCharacterId(firstCharacter.id);
+    if (defaultCharacter) {
+      setSelectedCharacterId(defaultCharacter.id);
+      return;
     }
-  }, [characters, charactersQuery.data, selectedCharacterId, setSelectedCharacterId]);
+    if (selectedCharacterId) {
+      setSelectedCharacterId(null);
+    }
+  }, [charactersQuery.data, defaultCharacter, selected, selectedCharacterId, setSelectedCharacterId]);
 
   if (charactersQuery.isLoading) {
     return (
@@ -77,8 +79,11 @@ export function CharacterSelector({ disabled, onCharacterChange }: CharacterSele
     return <div className="character-selector-empty">暂无可用角色</div>;
   }
 
-  const [firstCharacter] = characters;
-  const current = selected || firstCharacter;
+  if (!selected && !defaultCharacter) {
+    return <div className="character-selector-empty">默认角色 role01 缺失</div>;
+  }
+
+  const current = selected || defaultCharacter;
 
   function choose(characterId: string) {
     if (characterId === selectedCharacterId) {
@@ -92,8 +97,8 @@ export function CharacterSelector({ disabled, onCharacterChange }: CharacterSele
     <Dialog.Root>
       <Dialog.Trigger asChild>
         <button className="character-selector-button" type="button" disabled={disabled}>
-          <CharacterAvatar character={current} />
-          <span>{current.display_name || current.id}</span>
+          {current ? <CharacterAvatar character={current} /> : <span className="character-selector-avatar fallback" />}
+          <span>{hasInvalidSavedCharacter ? "已恢复默认角色" : current?.display_name || current?.id || DEFAULT_CHARACTER_ID}</span>
           <ChevronDown size={15} />
         </button>
       </Dialog.Trigger>
@@ -104,14 +109,14 @@ export function CharacterSelector({ disabled, onCharacterChange }: CharacterSele
           <div className="character-selector-list">
             {characters.map((character) => (
               <button
-                className={character.id === current.id ? "active" : ""}
+                className={current && character.id === current.id ? "active" : ""}
                 key={character.id}
                 type="button"
                 onClick={() => choose(character.id)}
               >
                 <CharacterAvatar character={character} />
                 <span>{character.display_name || character.id}</span>
-                {character.id === current.id ? <Check size={15} /> : null}
+                {current && character.id === current.id ? <Check size={15} /> : null}
               </button>
             ))}
           </div>

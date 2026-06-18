@@ -12,8 +12,6 @@ export interface AvatarUploadResponse {
 
 export interface HealthResponse {
   status: string;
-  gptsovits: boolean;
-  qdrant: boolean;
   database: boolean;
   database_backend: string;
 }

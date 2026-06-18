@@ -44,9 +44,19 @@ export async function requestJson<T>(path: string, options: RequestInit = {}): P
       ...(options.headers || {}),
     },
   });
-  const payload = await response.json().catch(() => ({}));
+  const text = await response.text();
+  let payload: unknown = {};
+  if (text.trim()) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      throw new ApiError(`后端返回了非 JSON 响应：${response.status} ${response.statusText}`, response.status);
+    }
+  }
   if (!response.ok) {
-    const detail = payload.detail || `${response.status} ${response.statusText}`;
+    const detail = typeof payload === "object" && payload && "detail" in payload
+      ? (payload as { detail?: unknown }).detail
+      : `${response.status} ${response.statusText}`;
     throw new ApiError(typeof detail === "string" ? detail : JSON.stringify(detail), response.status);
   }
   return payload as T;

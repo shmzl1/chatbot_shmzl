@@ -1,6 +1,17 @@
-"""Health API wrapper around the legacy router."""
+from fastapi import APIRouter
 
-from api.health_api import router
+from core.schemas import HealthResponse
+from services.database_service import database_service
 
-__all__ = ["router"]
 
+router = APIRouter(tags=["health"])
+
+
+@router.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    database_ready = database_service.is_ready()
+    return HealthResponse(
+        status="ok" if database_ready else "degraded",
+        database=database_ready,
+        database_backend="sqlite",
+    )

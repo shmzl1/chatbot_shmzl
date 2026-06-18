@@ -3,7 +3,5 @@ uvicorn
 pydantic
 python-dotenv
 requests
-qdrant-client
 openai
-numpy
 python-multipart
