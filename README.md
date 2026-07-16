@@ -18,6 +18,14 @@ chatbot/
       sqlite_migrations/
     main.py
     modules/
+      characters/
+        packs/
+          .trash/
+          {character_id}/
+            character.json
+            voice_refs/
+            backups/
+    outputs/
     services/
   frontend/
     desktop/
@@ -37,36 +45,51 @@ UPLOAD_DIR="./data/uploads"
 BACKUP_DIR="./data/backups"
 ```
 
-后端启动时会自动创建 `backend/data/`、`backend/data/chatbot.db`、`backend/data/uploads/` 和 `backend/data/backups/`，并执行 `backend/database/sqlite_migrations/` 中尚未执行的迁移。
+后端启动时会自动创建 `backend/data/`、`backend/data/chatbot.db`、`backend/data/uploads/` 和 `backend/data/backups/`，并执行 `backend/database/sqlite_migrations/` 中尚未执行的迁移。前端不直接读写数据库，只通过 FastAPI 访问数据。
+
+运行数据的位置如下：
+
+- `backend/data/chatbot.db`：聊天、日记、日程、记忆、知识库、反馈和用户数据。
+- `backend/modules/characters/packs/{character_id}/character.json`：正式角色包；每个角色使用独立目录。
+- `backend/data/uploads/diary/images/`：日记图片。
+- `backend/data/uploads/avatars/user/` 和 `backend/data/uploads/avatars/characters/`：用户与角色头像。
+- `backend/data/backups/`：后端启动时创建的本地备份目录。
+- `backend/outputs/`：由后端通过 `/outputs` 提供的本地输出文件。
+
+这些目录可能包含私人聊天、日记和媒体数据。不要提交真实 `.env`、私人数据库或附件，也不要提交未经授权的素材、语音文件和模型权重。
 
 ## 环境变量
 
-复制环境变量示例：
+在仓库根目录复制环境变量示例：
 
 ```powershell
-cd E:\my_software\chatbot
 Copy-Item backend\.env.example backend\.env
 ```
 
-普通聊天只读取 `CHAT_*`，人设编辑只读取 `PERSONA_EDITOR_*`。不要提交真实 API Key，不要提交 `backend/.env`。
+普通聊天和人设编辑使用相互独立的 LLM 配置：前者使用 `CHAT_*`，后者使用 `PERSONA_EDITOR_*`。不要提交真实 API Key，不要提交 `backend/.env`。
+
+其他关键配置包括：
+
+- `DEFAULT_CHARACTER_ID`：正式默认角色 ID，默认值为 `role01`。
+- `APP_DATA_DIR`、`SQLITE_DB_PATH`、`UPLOAD_DIR`、`BACKUP_DIR`、`OUTPUTS_DIR`：本地数据路径。
+- `GPTSOVITS_BASE_URL`、`GPTSOVITS_TIMEOUT_SECONDS`：可选语音服务。
+- `TOP_K_*`、`STYLE_SCORE_THRESHOLD`：记忆和角色素材检索参数。
 
 项目不保留旧 `OPENAI_*`、`LLM_PROVIDER`、`auto`、`mock` 或 `fallback` 路径。缺配置、模型失败、JSON 非法都会直接报错。
 
 ## 后端启动
 
-安装依赖：
+在已激活的 Python 环境中，从仓库根目录安装依赖：
 
 ```powershell
-cd E:\my_software\chatbot\backend
-conda activate 3-chatbot
+Set-Location backend
 python -m pip install -r requirements.txt
 ```
 
-启动后端：
+从仓库根目录启动后端：
 
 ```powershell
-cd E:\my_software\chatbot\backend
-conda activate 3-chatbot
+Set-Location backend
 python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -84,8 +107,12 @@ http://127.0.0.1:8000/health
 
 ## 桌面端启动
 
+`frontend/desktop/` 是唯一前端，使用 Electron、React、TypeScript、Vite、Tailwind CSS、Radix UI、TanStack Query、Zustand 和 react-markdown。
+
+从仓库根目录运行：
+
 ```powershell
-cd E:\my_software\chatbot\frontend\desktop
+Set-Location frontend\desktop
 npm install
 npm run desktop
 ```
@@ -96,15 +123,12 @@ npm run desktop
 npm run dev
 ```
 
-桌面端默认连接 `http://127.0.0.1:8000`。前端不直接读取 SQLite 文件，只调用 FastAPI。
-
-桌面端顶部不显示“服务正常”类常驻状态。只有后端连接失败时才显示简短提示，并提供重试和设置入口；提示不展示 URL、IP 或端口。
+桌面端默认连接 `http://127.0.0.1:8000`。如果后端使用其他端口，可以在设置页修改后端地址；该地址保存在 localStorage。前端不使用 token 或 Bearer 登录态，也不直接读取 SQLite 文件，只调用 FastAPI。
 
 ## 一键启动脚本
 
 ```powershell
-cd E:\my_software\chatbot
-scripts\runtime\run_app.ps1
+.\scripts\runtime\run_app.ps1
 ```
 
 或双击：
@@ -113,120 +137,49 @@ scripts\runtime\run_app.ps1
 scripts/runtime/run_app.bat
 ```
 
-脚本只检查 Conda 和后端依赖，然后启动 FastAPI。它不会检查 Docker，也不会启动数据库容器。
+脚本使用名为 `3-chatbot` 的 Conda 环境，只检查 Conda 和后端依赖，然后启动 FastAPI 并打开接口文档；桌面端仍按上节命令启动。脚本不会检查 Docker，也不会启动数据库容器。
+
+## 当前主要功能
+
+- 聊天：多会话、新建、搜索、重命名、归档和恢复；历史会话按自身角色继续对话。
+- 日记：CRUD、搜索和筛选、心情与标签、图片附件，以及用户主动选择后的“让角色读这篇日记”。
+- 日程：任务 CRUD、今日任务、月历、筛选、完成、跳过和延期。
+- 设置：本地用户资料与头像、后端地址、连接状态和第三方开源声明。
+- 角色与人设：角色选择、角色包管理、头像、校验，以及经过预览和用户确认的人设修正。
+- 底层能力：长期记忆、关系记忆、知识库，以及可选 GPT-SoVITS 语音。
+
+日记和日程默认都不会自动进入聊天 prompt。只有用户点击“让角色读这篇日记”时，所选日记才会作为新对话的上下文。
+
+GPT-SoVITS 是可选服务，不会随应用自动启动。未指定情绪时使用 `neutral`；明确指定其他情绪时必须存在对应参考音频，缺失时会直接报错，不会静默回退到 `neutral`。
 
 ## 本地用户
 
-项目是本地单用户模式，不需要注册、登录、密码或 JWT。后端启动或首次调用 `/auth/me` 时会确保 `users` 表里存在一个默认本地用户：
-
-- 如果 SQLite 中没有用户，自动创建默认用户。
-- 如果已有且只有一个用户，直接复用。
-- 如果有多个用户，抛出明确错误，避免随意选择导致旧数据关联错乱。
-
-用户可以通过设置页修改显示 ID / 用户名，也可以上传本地头像。数据库主键 `users.id` 不建议修改。
+项目是本地单用户模式，不需要注册、登录、密码或 JWT。后端会创建或复用唯一的本地用户；数据库中存在多个用户时会明确报错，避免旧数据关联错乱。设置页可以修改显示 ID、用户名和本地头像。
 
 ## 默认角色
 
-`role01` 是系统正式默认角色，不是 mock。后端默认配置为 `DEFAULT_CHARACTER_ID=role01`，前端统一使用同一默认 ID。首次启动或没有保存过角色时，只有在角色列表中确实存在 `role01` 才会选择它；用户保存的其他有效角色会继续优先使用；保存角色失效时恢复到 `role01`。如果 `role01` 缺失，前端显示默认角色配置缺失并禁止角色相关操作，不会改用角色列表第一项。
+正式角色只从 `backend/modules/characters/packs/{character_id}/character.json` 加载。`role01` 是系统正式默认角色，不是 mock；它的正式文件是 `backend/modules/characters/packs/role01/character.json`。后端默认配置为 `DEFAULT_CHARACTER_ID=role01`，前端统一使用同一默认 ID。首次启动或没有保存过角色时，只有在角色列表中确实存在 `role01` 才会选择它；用户保存的其他有效角色会继续优先使用；保存角色失效时恢复到 `role01`。如果 `role01` 缺失，前端显示默认角色配置缺失并禁止角色相关操作，不会改用角色列表第一项。
 
-## 主要接口
+## 正式接口概览
 
-本地用户：
+正式路由由 `backend/modules/*` 注册，后端不注册以 `/debug` 为前缀的路由组。完整请求字段、响应字段和状态码以启动后的 `/docs` 为准。
 
-```text
-GET  /auth/status
-GET  /auth/me
-PUT  /auth/me
-POST /auth/me/avatar
-POST /auth/logout
-```
-
-聊天：
-
-```text
-POST /chat/text
-POST /chat
-GET  /chat/sessions
-GET  /chat/sessions/{session_id}/turns
-PATCH /chat/sessions/{session_id}
-POST /chat/sessions/{session_id}/archive
-POST /chat/sessions/{session_id}/unarchive
-```
-
-聊天支持多个会话。新对话不会立即写入数据库，用户发送第一条消息时才创建会话；标题来自第一条用户消息，不调用 LLM。会话支持搜索、重命名、归档和恢复。归档不会删除消息，归档会话默认只读，恢复后才能继续发送。
-
-聊天、日记和日程共用当前角色选择。前端只在 localStorage 保存已选角色 ID，真实角色列表始终来自后端 `/characters`。聊天发送时必须使用当前选中角色；历史会话按自身 `character_id` 同步角色。用户在已有会话中切换角色时，前端会开启新对话，避免把不同角色混入同一历史会话。日记页“让角色读这篇日记”也使用当前选中角色并开启新对话。日程数据不按角色隔离，角色选择只用于保持全局上下文一致。
-
-日记：
-
-```text
-GET    /diary/entries
-POST   /diary/entries
-GET    /diary/entries/{entry_id}
-PUT    /diary/entries/{entry_id}
-DELETE /diary/entries/{entry_id}
-POST   /diary/entries/{entry_id}/images
-DELETE /diary/images/{image_id}
-```
-
-日程：
-
-```text
-GET    /schedule/items
-POST   /schedule/items
-GET    /schedule/items/{item_id}
-PUT    /schedule/items/{item_id}
-DELETE /schedule/items/{item_id}
-GET    /schedule/today
-GET    /schedule/calendar
-POST   /schedule/occurrences/{occurrence_id}/complete
-POST   /schedule/occurrences/{occurrence_id}/skip
-POST   /schedule/occurrences/{occurrence_id}/postpone
-```
-
-日程第一阶段 MVP 使用 `schedule_items`、`schedule_occurrences`、`schedule_completion_logs` 三张 SQLite 表。延期会把旧 occurrence 标记为 `postponed`，再创建新的 `pending` occurrence；计划、自动复习、AI 排程、系统通知和聊天集成属于后续阶段。日程默认不进入聊天 prompt。
-
-桌面端日程筛选默认收起在“筛选”入口中，不常驻展示全部类型和全部状态；页面主体只显示当前有效筛选摘要、今日任务、月历和任务详情。
-
-人设编辑：
-
-```text
-POST /feedback/persona/turn
-GET  /feedback/persona/{character_id}
-POST /characters/{character_id}/persona-review/chat
-POST /characters/{character_id}/persona-review/finalize
-POST /characters/{character_id}/persona-review/apply
-POST /characters/{character_id}/persona-review/rollback
-```
-
-桌面端聊天页提供“人设修正”入口。用户从当前会话选择真实聊天轮次，保存逐轮 persona feedback，再与人设编辑 AI 讨论修改方向。人设编辑 AI 使用独立 `PERSONA_EDITOR_*` 配置，不写入普通聊天历史、不进入长期记忆或关系记忆。`finalize` 只生成预览和字段差异；只有用户确认“确认应用修改”后才调用 `apply` 写入角色人设。`rollback` 只恢复该角色最近一次已应用修改的备份。人设修正只影响后续回复，不改写历史聊天记录。
-
-## 人设和记忆
-
-固定核心人设：`id`、`display_name`、`core_personality`、`speaking_style`、`relationship_to_user`、`forbidden`、`reply_patterns`、`lore`、`style_contract`。这部分不可被人设编辑 AI 自动修改、删除、覆盖或压缩，每次聊天 prompt 必须完整读取。`avatar_url` 和 `voice` 是受保护元数据。
-
-可变补充人设：`dialogues`、`reactions`、`bad_examples`、`evaluation_criteria`、`revision_notes`。这些字段可由人设编辑 AI 少量追加，并在用户确认应用后压缩和归档。
-
-字段上限：`dialogues=20`、`reactions=20`、`bad_examples=20`、`evaluation_criteria=30`、`revision_notes=20`。生成 preview 不写归档，只有用户确认应用并真正写入 `character.json` 后才归档到角色包 `backups/persona_compaction_archive.jsonl`。
-
-记忆分为 pinned / always_read、普通 active、短期记忆。pinned 或 `read_policy=always` 每次 prompt 必读，不参与 topK；普通 active 记忆按相关性和重要度 topK 进入 prompt；过期、archived、superseded、deleted 或 `read_policy=never` 的记忆不会进入 prompt。
-
-## 轻量检查
-
-```powershell
-cd E:\my_software\chatbot\backend
-conda activate 3-chatbot
-python -m compileall .
-```
-
-```powershell
-cd E:\my_software\chatbot\frontend\desktop
-npm run build
-```
+| 功能 | 正式路径 |
+| --- | --- |
+| 健康检查和接口文档 | `/health`、`/docs` |
+| 本地用户 | `/auth/status`、`/auth/me`、`/auth/me/avatar`、`/auth/logout` |
+| 角色 | `/characters`、`/characters/{character_id}`、`/characters/{character_id}/*` |
+| 聊天和会话 | `/chat`、`/chat/text`、`/chat/sessions*` |
+| 日记和图片 | `/diary/entries*`、`/diary/images*` |
+| 日程 | `/schedule/items*`、`/schedule/today`、`/schedule/calendar`、`/schedule/occurrences*` |
+| 人设反馈与修正 | `/feedback/persona/*`、`/characters/{character_id}/persona-review/*` |
+| 长期记忆 | `/memory*` |
+| 关系记忆 | `/relationship-memory*`，其中 `/relationship-memory/debug` 是该模块的正式审计接口 |
+| 知识库 | `/knowledge*` |
+| 可选语音 | `/voice/test` |
+| 本地静态文件 | `/uploads/*`、`/outputs/*` |
 
 ## 更多文档
 
 - [架构说明](docs/ARCHITECTURE.md)
-- [Codex 协作指南](docs/CODEX_GUIDE.md)
-- [桌面端前端设计](docs/桌面端前端设计.md)
 - [第三方开源声明](THIRD_PARTY_NOTICES.md)

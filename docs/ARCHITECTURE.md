@@ -76,6 +76,18 @@ frontend/desktop
 
 聊天会话保存在 `chat_sessions` 和 `chat_turns`。`chat_sessions` 包含 `title`、`is_archived`、`archived_at` 和 `user_id`。新对话第一次发送时才创建真实会话，标题由第一条用户消息裁剪生成；归档只设置软状态，不删除 turn。正式前端只使用 `/chat/sessions`，后端默认不注册 `/debug/*` 路由。
 
+角色：
+
+```text
+frontend/desktop
+  -> modules.characters.api
+  -> modules.characters.service
+  -> modules.characters.pack_loader
+  -> backend/modules/characters/packs/{character_id}/character.json
+```
+
+正式角色数据只从角色包目录读取；每个角色的 `character.json` 是必需文件，`voice_refs/` 保存语音参考素材，`backups/` 保存人设备份。被删除的角色包移入 `packs/.trash/`。
+
 桌面端维护一个共享的当前角色 ID，只持久化到 localStorage。角色实体和角色列表始终来自后端 characters 模块。`role01` 是正式系统默认角色：没有保存角色时选择 `role01`；保存角色有效时继续使用保存角色；保存角色失效时恢复 `role01`；`role01` 缺失时显示配置错误并禁止角色相关操作。前端不能使用角色列表第一项作为默认角色。聊天发送使用当前角色 ID；打开历史会话时以前端会话的 `character_id` 为准同步当前角色。用户在已有会话中切换角色时，前端开启新对话，避免同一会话混入不同角色。
 
 日记：
